@@ -14,3 +14,5 @@ build/
 /service/
 /CLAUDE.md
 /docs/PLAN.md
+# Personal data (e.g. account exports) used to test parsers
+/scratch/

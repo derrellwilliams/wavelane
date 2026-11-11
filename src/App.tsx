@@ -1,0 +1,83 @@
+import { signal } from "@preact/signals";
+import { useEffect } from "preact/hooks";
+import { refresh, signOut } from "./api/auth";
+import { ApiError } from "./api/client";
+import { session, setSession } from "./api/session";
+import { Button } from "./design/components/Button";
+import { Mark } from "./design/components/Mark";
+import { Hello } from "./features/hello/Hello";
+import { Home } from "./features/home/Home";
+import { SignIn } from "./features/signin/SignIn";
+import { useAutoFocus } from "./nav/hooks";
+
+/// Decides which screen shows: sign-in, the signed-in app, or "can't reach the server" when a
+/// saved session can't be checked.
+
+type Status = "checking" | "ready" | "offline";
+type View = "home" | "setup";
+
+const status = signal<Status>(session.value ? "checking" : "ready");
+const view = signal<View>("home");
+
+/// Confirms the saved session with the server. Only a clear "token rejected" signs the user out;
+/// a server that is off or unreachable keeps the session for next time.
+async function check() {
+  const saved = session.value;
+  if (!saved) return;
+  status.value = "checking";
+  try {
+    setSession(await refresh(saved));
+    status.value = "ready";
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 401) {
+      setSession(null);
+      status.value = "ready";
+    } else {
+      status.value = "offline";
+    }
+  }
+}
+
+function leave() {
+  const current = session.value;
+  if (current) void signOut(current);
+  setSession(null);
+  view.value = "home";
+  status.value = "ready";
+}
+
+function Offline({ serverName }: { serverName: string }) {
+  useAutoFocus();
+  return (
+    <main class="page">
+      <Mark />
+      <h1 class="display">Can't reach {serverName}</h1>
+      <p class="secondary page-text">Check that the server is on and the TV is connected to the network.</p>
+      <div class="row actions">
+        <Button icon="arrow-clockwise" onPress={() => void check()} autoFocus>
+          Try again
+        </Button>
+        <Button icon="sign-out" onPress={leave}>
+          Sign out
+        </Button>
+      </div>
+    </main>
+  );
+}
+
+export function App() {
+  useEffect(() => void check(), []);
+
+  const current = session.value;
+  if (!current) return <SignIn />;
+  if (status.value === "checking") {
+    return (
+      <main class="page">
+        <Mark />
+      </main>
+    );
+  }
+  if (status.value === "offline") return <Offline serverName={current.serverName} />;
+  if (view.value === "setup") return <Hello onClose={() => (view.value = "home")} />;
+  return <Home session={current} onSetupCheck={() => (view.value = "setup")} onSignOut={leave} />;
+}

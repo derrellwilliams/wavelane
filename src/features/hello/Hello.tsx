@@ -1,10 +1,12 @@
 import { signal } from "@preact/signals";
 import { useEffect } from "preact/hooks";
+import { Mark } from "../../design/components/Mark";
+import { useBack } from "../../nav/hooks";
 import { callService, onTV } from "../../platform/service";
 import "./hello.css";
 
 /// Phase 0 screen: proves the app installs and renders the brand on the TV, shows what the remote
-/// sends, and checks that the app's helper service answers. Replaced by sign-in in phase 1.
+/// sends, and checks that the app's helper service answers. Opened from the signed-in screen.
 ///
 /// Extra checks can be added without touching this file: any `src/features/hello/*.local.ts` that
 /// exports `extraChecks(run)` is picked up (those files are git-ignored, so they stay on this machine).
@@ -48,12 +50,13 @@ async function runChecks() {
   for (const local of localChecks) await local.extraChecks?.(run);
 }
 
-export function Hello() {
+export function Hello({ onClose }: { onClose: () => void }) {
+  useBack(onClose);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       lastKey.value = `${event.key || "Unidentified"} · ${event.keyCode}`;
       // OK on the remote (or Enter) runs the checks again.
-      if (event.keyCode === 13) void runChecks();
+      if (event.keyCode === 13 && !event.repeat) void runChecks();
     };
     window.addEventListener("keydown", onKey);
     void runChecks();
@@ -61,12 +64,10 @@ export function Hello() {
   }, []);
 
   return (
-    <main class="hello">
-      <svg class="hello-mark" viewBox="0 0 92 16" aria-hidden="true">
-        <path d="M1 7.9C6 -1.3 11 -1.3 16 7.9C20.5 15.3 25.5 15.3 31 7.9C36 0.5 41 0.5 46 7.9C51.3 16.1 56.3 16.1 61 7.9C66 -0.3 71 -0.3 76 7.9C80.6 14.9 85.6 14.9 91 7.9" />
-      </svg>
-      <h1 class="display">Wavelane</h1>
-      <p class="secondary">Setup check. Press OK to run the checks again.</p>
+    <main class="page">
+      <Mark />
+      <h1 class="display">Setup check</h1>
+      <p class="secondary">Press OK to run the checks again, Back to return.</p>
 
       <dl class="hello-list">
         <dt class="secondary">Remote</dt>

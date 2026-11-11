@@ -24,6 +24,7 @@
   --line: rgb(236 228 210 / 0.12); /* separators */
   --tint: rgb(236 228 210 / 0.12); /* wash behind tinted controls */
   --tint-pressed: rgb(236 228 210 / 0.2);
+  --on-ink: #1a1a1a; /* text and icons on a tan fill (a focused button) */
   --placeholder: #2e2e2e; /* behind artwork that hasn't loaded */
   --unavailable: 0.35; /* opacity of things that can't be used right now */
 
@@ -38,6 +39,8 @@
   --size-lead: 35px;
   --size-title: 38px;
   --size-display: 63px; /* screen and detail titles */
+  --size-code: 112px; /* the Quick Connect code, read from across the room */
+  --tracking-code: 12px;
   --tracking-display: -0.9px;
   --leading-text: 1.4;
   --leading-title: 1.2;
@@ -51,6 +54,16 @@
   --space-xl: 42px;
   --space-xxl: 60px;
   --screen-inset: 64px; /* inside the TV-safe area */
+
+  /* Controls */
+  --control: 84px; /* button height */
+  --field: 112px; /* text field height: label over value */
+  --field-width: 880px;
+  --measure: 1100px; /* longest comfortable line of text */
+  --icon: 36px;
+  --mark-width: 184px;
+  --mark-height: 32px;
+  --press-scale: 0.97;
 
   /* Radius: artwork is square. */
   --radius-small: 10px;

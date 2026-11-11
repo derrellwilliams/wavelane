@@ -1,5 +1,8 @@
 import { render } from "preact";
 import "./design/base.css";
-import { Hello } from "./features/hello/Hello";
+import "./design/components/components.css";
+import { App } from "./App";
+import { startFocusEngine } from "./nav/focus";
 
-render(<Hello />, document.getElementById("app")!);
+startFocusEngine();
+render(<App />, document.getElementById("app")!);

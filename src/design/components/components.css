@@ -1,0 +1,142 @@
+/* Core components. Focus is the remote's position: controls invert to a tan fill, nothing glows.
+   Only transform and opacity are animated; the focus swap itself is instant. */
+
+[data-focusable] {
+  outline: none;
+  cursor: pointer;
+}
+
+.icon {
+  flex: none;
+  width: var(--icon);
+  height: var(--icon);
+  fill: currentColor;
+}
+
+.mark {
+  width: var(--mark-width);
+  height: var(--mark-height);
+  overflow: visible;
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  height: var(--control);
+  padding: 0 var(--space-lg);
+  border: 0;
+  border-radius: var(--radius-small);
+  background: var(--tint);
+  color: var(--ink);
+  font: inherit;
+  white-space: nowrap;
+  transition: transform var(--press) var(--ease-out);
+}
+.button:focus {
+  background: var(--ink);
+  color: var(--on-ink);
+}
+.button:active:not([aria-disabled="true"]) {
+  transform: scale(var(--press-scale));
+}
+.button[aria-disabled="true"] {
+  opacity: var(--unavailable);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-xxs);
+  width: var(--field-width);
+  height: var(--field);
+  padding: 0 var(--space-md);
+  border-radius: var(--radius-small);
+  background: var(--tint);
+  /* The frame is drawn inside the box so focusing never shifts the layout. */
+  box-shadow: inset 0 0 0 var(--focus-ring) transparent;
+}
+.field:focus,
+.field:focus-within {
+  box-shadow: inset 0 0 0 var(--focus-ring) var(--ink);
+}
+/* Typing: the wash deepens so it is clear the keys now go to the field. */
+.field:focus-within:not(:focus) {
+  background: var(--tint-pressed);
+}
+.field-label {
+  color: var(--ink-2);
+  font-size: var(--size-caption);
+  line-height: var(--leading-title);
+}
+.field-input {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: none;
+  color: var(--ink);
+  caret-color: var(--ink);
+  font: inherit;
+  line-height: var(--leading-title);
+}
+.field-input.mono {
+  font-family: var(--mono);
+}
+.field-input::placeholder {
+  color: var(--ink-2);
+  opacity: var(--unavailable);
+}
+/* Chromium paints autofilled fields in its own colors; keep ours. */
+.field-input:-webkit-autofill {
+  -webkit-text-fill-color: var(--ink);
+}
+
+/* A screen that is one column of text and controls (sign-in, signed-in summary, setup check). */
+.page {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-md);
+  height: 100%;
+  padding: var(--space-xxl) var(--screen-inset);
+}
+.page .mark {
+  margin-bottom: var(--space-lg);
+}
+.page-text {
+  max-width: var(--measure);
+}
+.row {
+  display: flex;
+  gap: var(--space-sm);
+}
+.stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  margin-top: var(--space-lg);
+}
+.actions {
+  margin-top: var(--space-lg);
+}
+.notice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+.facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-sm) var(--space-xl);
+  margin: var(--space-lg) 0 0;
+}
+.facts dd {
+  margin: 0;
+}

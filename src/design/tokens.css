@@ -1,0 +1,69 @@
+/* Wavelane tokens: Wavetile's Theme.dark (wavetile DesignSystem/Theme.swift) on a 1920×1080 TV
+   canvas. The single source for color, type, spacing, radius and motion: feature code uses these
+   variables and never a literal value. Dark only (OLED). No red, and text is never white. */
+
+@font-face {
+  font-family: "Inter";
+  src: url("./fonts/Inter-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-display: block;
+}
+@font-face {
+  font-family: "Geist Mono";
+  src: url("./fonts/GeistMono-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-display: block;
+}
+
+:root {
+  /* Color */
+  --bg: #1a1a1a; /* canvas */
+  --surface: #262626; /* cards, drawers, sheets */
+  --ink: #ece4d2; /* the tan: titles, primary text, icons, controls, focus */
+  --ink-2: #989388; /* secondary text, solid so it reads the same over artwork */
+  --line: rgb(236 228 210 / 0.12); /* separators */
+  --tint: rgb(236 228 210 / 0.12); /* wash behind tinted controls */
+  --tint-pressed: rgb(236 228 210 / 0.2);
+  --placeholder: #2e2e2e; /* behind artwork that hasn't loaded */
+  --unavailable: 0.35; /* opacity of things that can't be used right now */
+
+  /* Type: one weight, hierarchy from size, color and the mono face. Wavetile's scale
+     12 · 14 · 16 · 18 · 20 · 22 · 36 at ×1.75 for viewing distance (tune on the TV). */
+  --text: "Inter", sans-serif;
+  --mono: "Geist Mono", monospace;
+  --size-caption: 21px;
+  --size-small: 24px; /* item titles, subtitles and mono metadata */
+  --size-body: 28px;
+  --size-large: 32px; /* shelf and section titles */
+  --size-lead: 35px;
+  --size-title: 38px;
+  --size-display: 63px; /* screen and detail titles */
+  --tracking-display: -0.9px;
+  --leading-text: 1.4;
+  --leading-title: 1.2;
+
+  /* Spacing: Wavetile's steps ×1.75, rounded to even pixels. */
+  --space-xxs: 4px;
+  --space-xs: 8px;
+  --space-sm: 14px;
+  --space-md: 22px;
+  --space-lg: 32px;
+  --space-xl: 42px;
+  --space-xxl: 60px;
+  --screen-inset: 64px; /* inside the TV-safe area */
+
+  /* Radius: artwork is square. */
+  --radius-small: 10px;
+  --radius-artwork: 0;
+  --radius-card: 28px;
+
+  /* Focus: the remote's position. Tan frame and a slight lift on artwork. */
+  --focus-ring: 4px;
+  --focus-scale: 1.04;
+
+  /* Motion: ease-out, no overshoot, under 300 ms. Animate transform and opacity only. */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --press: 120ms;
+  --snappy: 200ms;
+  --smooth: 280ms;
+}

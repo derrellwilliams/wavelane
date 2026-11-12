@@ -9,10 +9,12 @@ import { Grid } from "../browse/Grid";
 import { Status, Unreachable } from "../browse/Status";
 import { useEnter } from "../shell/enter";
 import { openItem } from "../shell/route";
-import { arrange, decadesOf, DEFAULT_VIEW, genresOf, isFiltered, readView, SORTS, type SortKey, type View } from "./arrange";
+import { averages } from "../../letterboxd/average";
+import { useMarks } from "../../letterboxd/marks";
+import { arrange, decadesOf, DEFAULT_VIEW, genresOf, isFiltered, readView, SEEINGS, SORTS, type Seeing, type SortKey, type View } from "./arrange";
 
 type Kind = "Movie" | "Series";
-type Picking = "sort" | "genre" | "decade" | null;
+type Picking = "sort" | "genre" | "decade" | "seeing" | null;
 
 const loaders: Record<Kind, (session: Session) => ReturnType<typeof everything>> = {
   Movie: (session) => everything(session, "Movie"),
@@ -28,7 +30,15 @@ export function Library({ type }: { type: Kind }) {
   const [picking, setPicking] = useState<Picking>(null);
 
   const all = library.data;
-  const shown = useMemo(() => arrange(all ?? [], view), [all, view]);
+  const marks = useMarks(type === "Movie" ? all : undefined);
+  const logged = marks.size > 0;
+  const known = averages.value;
+  // Averages arrive one by one; the order only follows them while sorting by them.
+  const byAverage = view.sort === "average" ? known : null;
+  const shown = useMemo(
+    () => arrange(all ?? [], view, marks, (item) => (item.tmdb ? known.get(item.tmdb)?.rating ?? undefined : undefined)),
+    [all, view, marks, byAverage],
+  );
   const genres = useMemo(() => genresOf(all ?? []), [all]);
   const decades = useMemo(() => decadesOf(all ?? []), [all]);
   useEnter(screen, all !== undefined || library.failed);
@@ -40,7 +50,7 @@ export function Library({ type }: { type: Kind }) {
     if (screen.current) screen.current.scrollTop = 0;
   };
 
-  const sorts = type === "Movie" ? SORTS : SORTS.filter((sort) => sort.id !== "runtime");
+  const sorts = SORTS.filter((sort) => (type === "Movie" || sort.id !== "runtime") && (sort.id === "average" ? type === "Movie" : logged || (sort.id !== "mine" && sort.id !== "seen")));
   const sortLabel = sorts.find((sort) => sort.id === view.sort)?.label ?? "Name";
   const menus: Record<Exclude<Picking, null>, { title: string; options: Option[]; value: string; pick: (id: string) => void }> = {
     sort: { title: "Sort by", options: sorts, value: view.sort, pick: (id) => change({ sort: id as SortKey }) },
@@ -49,6 +59,12 @@ export function Library({ type }: { type: Kind }) {
       options: [{ id: "", label: "All genres" }, ...genres.map((genre) => ({ id: genre, label: genre }))],
       value: view.genre,
       pick: (genre) => change({ genre }),
+    },
+    seeing: {
+      title: "Letterboxd",
+      options: SEEINGS,
+      value: view.seeing,
+      pick: (seeing) => change({ seeing: seeing as Seeing }),
     },
     decade: {
       title: "Decade",
@@ -78,6 +94,11 @@ export function Library({ type }: { type: Kind }) {
             <Button icon="calendar-blank" on={!!view.decade} onPress={() => setPicking("decade")}>
               {view.decade ? `${view.decade}s` : "Decade"}
             </Button>
+            {logged && (
+              <Button icon="film-reel" on={!!view.seeing} onPress={() => setPicking("seeing")}>
+                {SEEINGS.find((entry) => entry.id === view.seeing)?.label.replace(" on Letterboxd", "") || "Letterboxd"}
+              </Button>
+            )}
             <Button icon={view.unwatched ? "check" : "eye"} on={view.unwatched} onPress={() => change({ unwatched: !view.unwatched })}>
               Unwatched
             </Button>

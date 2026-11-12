@@ -130,6 +130,18 @@
 .actions {
   margin-top: var(--space-lg);
 }
+/* A long column of plain rows (films with no match). Rows are focusable so the remote can scroll. */
+.list {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-xs);
+  width: var(--measure);
+}
+.list > * {
+  flex: none;
+  justify-content: space-between;
+}
 .notice {
   display: flex;
   align-items: center;

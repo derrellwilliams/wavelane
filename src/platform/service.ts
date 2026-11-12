@@ -14,7 +14,7 @@ declare global {
   }
 }
 
-export const onTV = typeof window.WebOSServiceBridge === "function";
+export const onTV = typeof window !== "undefined" && typeof window.WebOSServiceBridge === "function";
 
 export function callService<T>(method: string, params: Record<string, unknown> = {}, timeoutMs = 20000): Promise<T> {
   return new Promise((resolve, reject) => {

@@ -1,4 +1,4 @@
-import { useRef, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import type { Item } from "../../api/items";
 import { children, episodeToPlay, episodes, item as fetchItem, seasons, setFavorite, setPlayed, similar, withPerson } from "../../api/library";
 import { session } from "../../api/session";
@@ -8,6 +8,8 @@ import { Card } from "../browse/Card";
 import { Hero } from "../browse/Hero";
 import { ItemShelf, Shelf } from "../browse/Shelf";
 import { Unreachable } from "../browse/Status";
+import { averages, describeAverage, wantAverage } from "../../letterboxd/average";
+import { describeSeen, useMarks } from "../../letterboxd/marks";
 import { useEnter } from "../shell/enter";
 import { openItem, play } from "../shell/route";
 
@@ -31,6 +33,9 @@ export function Detail({ id }: { id: string }) {
     seasonList.data?.[0];
   const seasonId = season?.id;
   const episodeList = useResource(seasonId ? `episodes:${id}:${seasonId}` : null, (current) => episodes(current, id, seasonId!));
+  const mine = useMarks(item?.type === "Movie" ? [item] : undefined);
+  const tmdb = item?.type === "Movie" ? item.tmdb : undefined;
+  useEffect(() => wantAverage(tmdb), [tmdb]);
   const alike = useResource(type === "Movie" || type === "Series" ? `similar:${id}` : null, (current) => similar(current, id));
   const held = useResource(type === "BoxSet" ? `children:${id}` : null, (current) => children(current, id));
   const credits = useResource(type === "Person" ? `person:${id}` : null, (current) => withPerson(current, id));
@@ -74,7 +79,7 @@ export function Detail({ id }: { id: string }) {
 
   return (
     <div ref={screen} class="detail" data-scroll="y">
-      <Hero item={item} full>
+      <Hero item={item} full notes={[describeAverage(tmdb ? averages.value.get(tmdb) : undefined), describeSeen(mine.get(item.id))]}>
         {(playable || type === "Series") && (
           <Button icon="play" onPress={() => void start(item.progress ? true : false)} autoFocus>
             {item.progress ? "Resume" : "Play"}

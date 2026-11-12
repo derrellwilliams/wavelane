@@ -1,8 +1,9 @@
-import { useRef, useState } from "preact/hooks";
+import { useCallback, useRef, useState } from "preact/hooks";
 import { versionAtLeast, type Session } from "../../api/auth";
 import { Button } from "../../design/components/Button";
 import { Icon } from "../../design/components/Icon";
 import { Mark } from "../../design/components/Mark";
+import { Connect } from "../letterboxd/Connect";
 import { SubtitleStyle } from "../player/SubtitleStyle";
 import { useEnter } from "../shell/enter";
 
@@ -17,7 +18,9 @@ interface Props {
 export function Account({ session, onSetupCheck, onSignOut }: Props) {
   const screen = useRef<HTMLElement>(null);
   const [styling, setStyling] = useState(false);
-  useEnter(screen, !styling);
+  const [lists, setLists] = useState(false);
+  const closeLists = useCallback(() => setLists(false), []);
+  useEnter(screen, !styling && !lists);
 
   const missing = !versionAtLeast(session.serverVersion, 10, 9)
     ? "Scrub thumbnails need Jellyfin 10.9 and Skip Intro needs 10.10."
@@ -25,6 +28,7 @@ export function Account({ session, onSetupCheck, onSignOut }: Props) {
       ? "Skip Intro needs Jellyfin 10.10."
       : "";
 
+  if (lists) return <Connect onClose={closeLists} />;
   if (styling) return <SubtitleStyle onClose={() => setStyling(false)} />;
 
   return (
@@ -55,6 +59,9 @@ export function Account({ session, onSetupCheck, onSignOut }: Props) {
         </Button>
         <Button icon="subtitles" onPress={() => setStyling(true)}>
           Subtitle appearance
+        </Button>
+        <Button icon="film-reel" onPress={() => setLists(true)}>
+          Letterboxd
         </Button>
         <Button icon="sign-out" onPress={onSignOut}>
           Sign out

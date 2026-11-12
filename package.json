@@ -9,6 +9,7 @@
     "build": "vite build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "seed": "node scripts/seed-export.mjs",
     "icons": "node scripts/make-icons.mjs",
     "phosphor": "node scripts/make-phosphor.mjs"
   },

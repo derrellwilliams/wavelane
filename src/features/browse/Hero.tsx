@@ -8,12 +8,14 @@ interface Props {
   full?: boolean;
   /// A line above the title ("Continue watching", a show's name).
   kicker?: string;
+  /// One more line under the facts (what Letterboxd says about it).
+  notes?: (string | null)[];
   children?: ComponentChildren;
 }
 
 /// Backdrop, logo (or the title in type), facts, description and a row of buttons: Home's
 /// spotlight and the head of every detail page.
-export function Hero({ item, full, kicker, children }: Props) {
+export function Hero({ item, full, kicker, notes, children }: Props) {
   const backdrop = artSrc(item.backdrop, 1920, 1080, false);
   const logo = artSrc(item.logo, token("--logo-w"), token("--logo-h"), false);
   const line = facts(item);
@@ -38,6 +40,7 @@ export function Hero({ item, full, kicker, children }: Props) {
         {logo ? <img key={logo} class="hero-logo" src={logo} alt={heading} /> : <h1 class="display">{heading}</h1>}
         {heading !== item.name && <p class="section">{item.name}</p>}
         {line.length > 0 && <p class="mono secondary">{line.join("  ·  ")}</p>}
+        {notes?.map((note) => note && <p key={note} class="mono secondary">{note}</p>)}
         {full && item.genres.length > 0 && <p class="secondary">{item.genres.slice(0, 4).join(", ")}</p>}
         {item.overview && <p class={full ? "hero-overview" : "hero-overview is-short"}>{item.overview}</p>}
         {children && (

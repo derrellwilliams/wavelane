@@ -55,9 +55,28 @@ describe("filter choices", () => {
   });
 });
 
+describe("arrange with a Letterboxd log", () => {
+  const seen = (more: object) => ({ name: "", year: 2000, uri: "", watched: true, rewatches: 0, watchlist: false, ...more });
+  const marks = new Map([
+    ["Heat", seen({ rating: 4, last: "2021-05-01" })],
+    ["Alien", seen({ rating: 5, last: "2020-01-01" })],
+    ["Mystery", seen({ watched: false, watchlist: true })],
+  ]);
+  it("sorts by your rating and by the date you watched, unlogged last", () => {
+    expect(names(arrange(LIBRARY, { ...DEFAULT_VIEW, sort: "mine" }, marks))).toEqual(["Alien", "Heat", "Mystery", "Zodiac"]);
+    expect(names(arrange(LIBRARY, { ...DEFAULT_VIEW, sort: "seen" }, marks))).toEqual(["Heat", "Alien", "Mystery", "Zodiac"]);
+  });
+  it("filters watched, not watched and watchlist", () => {
+    expect(names(arrange(LIBRARY, { ...DEFAULT_VIEW, seeing: "watched" }, marks))).toEqual(["Alien", "Heat"]);
+    expect(names(arrange(LIBRARY, { ...DEFAULT_VIEW, seeing: "unwatched" }, marks))).toEqual(["Mystery", "Zodiac"]);
+    expect(names(arrange(LIBRARY, { ...DEFAULT_VIEW, seeing: "watchlist" }, marks))).toEqual(["Mystery"]);
+    expect(isFiltered({ ...DEFAULT_VIEW, seeing: "watched" })).toBe(true);
+  });
+});
+
 describe("readView", () => {
   it("reads back a saved view", () => {
-    const view = { sort: "rating", genre: "Crime", decade: "1990", unwatched: true, favorites: false } as const;
+    const view = { sort: "rating", genre: "Crime", decade: "1990", unwatched: true, favorites: false, seeing: "watchlist" } as const;
     expect(readView(JSON.stringify(view))).toEqual(view);
   });
 

@@ -1,5 +1,10 @@
 import { useEffect, useLayoutEffect, useRef } from "preact/hooks";
 import type { Session } from "../../api/auth";
+import { everything } from "../../api/library";
+import { useResource } from "../../data/resource";
+import { setLibraryIds } from "../../letterboxd/average";
+import { refreshFeed } from "../../letterboxd/feed";
+import { applySeed } from "../../letterboxd/seed";
 import { Icon } from "../../design/components/Icon";
 import type { IconName } from "../../design/icons.gen";
 import { focusFirst, focusIfUsable, onEdge } from "../../nav/focus";
@@ -24,6 +29,7 @@ const TABS: { id: Tab; icon: IconName; label: string }[] = [
 ];
 
 const back = () => void goBack();
+const loadMovies = (session: Session) => everything(session, "Movie");
 
 interface Props {
   session: Session;
@@ -41,6 +47,19 @@ export function Shell({ session, onSetupCheck, onSignOut }: Props) {
   const open = pages.value;
   const top = open[open.length - 1];
   const watching = playing.value;
+
+  // Letterboxd averages are read in the background for the library's movies.
+  const movies = useResource("all:Movie", loadMovies).data;
+  useEffect(() => {
+    if (movies) setLibraryIds(movies.flatMap((movie) => (movie.tmdb ? [movie.tmdb] : [])));
+  }, [movies]);
+
+  useEffect(() => {
+    applySeed();
+    void refreshFeed();
+    const timer = setInterval(() => void refreshFeed(), 60 * 60 * 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   useBack(top || current !== "home" ? back : null);
 

@@ -11,25 +11,32 @@ import { useEnter } from "../shell/enter";
 import { openItem } from "../shell/route";
 import { averages } from "../../letterboxd/average";
 import { useMarks } from "../../letterboxd/marks";
+import { isKidsShow, overrides } from "../kids/kids";
 import { arrange, decadesOf, DEFAULT_VIEW, isFiltered, readView, SEEINGS, SORTS, watched, type Seeing, type SortKey, type View } from "./arrange";
 
-type Kind = "Movie" | "Series";
+/// Kids is the shows the Kids tab holds; Series is the rest, so a show is on one tab only.
+type Kind = "Movie" | "Series" | "Kids";
 type Picking = "sort" | "decade" | "seeing" | null;
 
 const loaders: Record<Kind, (session: Session) => ReturnType<typeof everything>> = {
   Movie: (session) => everything(session, "Movie"),
   Series: (session) => everything(session, "Series"),
+  Kids: (session) => everything(session, "Series"),
 };
 
 /// Movies or Shows: the whole library as a poster grid, with the order and filters chosen from
 /// the row above it. The choice is remembered per library.
 export function Library({ type }: { type: Kind }) {
   const screen = useRef<HTMLDivElement>(null);
-  const library = useResource(`all:${type}`, loaders[type]);
+  const library = useResource(`all:${type === "Movie" ? "Movie" : "Series"}`, loaders[type]);
+  const choices = overrides.value;
   const [view, setView] = useState<View>(() => readView(load(`view.${type}`)));
   const [picking, setPicking] = useState<Picking>(null);
 
-  const all = library.data;
+  const all = useMemo(
+    () => (type === "Movie" ? library.data : library.data?.filter((item) => isKidsShow(item, choices) === (type === "Kids"))),
+    [library.data, type, choices],
+  );
   const marks = useMarks(type === "Movie" ? all : undefined);
   const logged = marks.size > 0;
   const known = averages.value;
@@ -71,14 +78,14 @@ export function Library({ type }: { type: Kind }) {
     },
   };
   const menu = picking && menus[picking];
-  const noun = type === "Movie" ? "movies" : "shows";
+  const noun = type === "Movie" ? "movies" : type === "Kids" ? "kids' shows" : "shows";
 
   return (
     <>
       <div ref={screen} class="screen" data-scroll="y">
         <header class="screen-head" data-scroll-anchor>
           <div class="title-row">
-            <h1 class="display">{type === "Movie" ? "Movies" : "Shows"}</h1>
+            <h1 class="display">{type === "Movie" ? "Movies" : type === "Kids" ? "Kids" : "Shows"}</h1>
             {all && <span class="mono secondary">{shown.length === all.length ? all.length : `${shown.length} of ${all.length}`}</span>}
           </div>
           <div class="row" data-focus-group>

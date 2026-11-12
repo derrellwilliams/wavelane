@@ -14,6 +14,7 @@ import { Unreachable } from "../browse/Status";
 import { averages, wantAverage } from "../../letterboxd/average";
 import { describeSeen, useMarks } from "../../letterboxd/marks";
 import { watchLog } from "../../letterboxd/store";
+import { isKidsShow, overrides, setKids } from "../kids/kids";
 import { useEnter } from "../shell/enter";
 import { openItem, play } from "../shell/route";
 
@@ -142,6 +143,11 @@ export function Detail({ id }: { id: string }) {
           <Button icon={state.favorite ? "check" : "heart"} on={state.favorite} onPress={() => void toggle("favorite")} autoFocus={!watchable && !playable}>
             Favorite
           </Button>
+          {type === "Series" && (
+            <Button icon="balloon" on={isKidsShow(item, overrides.value)} onPress={() => setKids(item, !isKidsShow(item, overrides.value))}>
+              Kids
+            </Button>
+          )}
           {seriesId && (
             <Button icon="television-simple" onPress={() => openItem({ id: seriesId })}>
               Go to show

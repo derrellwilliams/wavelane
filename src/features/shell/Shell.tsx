@@ -24,6 +24,7 @@ const TABS: { id: Tab; icon: IconName; label: string }[] = [
   { id: "home", icon: "house", label: "Home" },
   { id: "movies", icon: "film-strip", label: "Movies" },
   { id: "shows", icon: "television-simple", label: "Shows" },
+  { id: "kids", icon: "balloon", label: "Kids" },
   { id: "search", icon: "magnifying-glass", label: "Search" },
   { id: "account", icon: "gear-six", label: "Settings" },
 ];
@@ -115,6 +116,7 @@ export function Shell({ session, onSetupCheck, onSignOut }: Props) {
         {current === "home" && <Home />}
         {current === "movies" && <Library key="Movie" type="Movie" />}
         {current === "shows" && <Library key="Series" type="Series" />}
+        {current === "kids" && <Library key="Kids" type="Kids" />}
         {current === "search" && <Search />}
         {current === "account" && <Account session={session} onSetupCheck={onSetupCheck} onSignOut={onSignOut} />}
       </div>

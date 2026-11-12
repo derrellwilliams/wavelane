@@ -1,5 +1,5 @@
 // Draws the launcher icons (webos/icon.png 80×80, webos/largeIcon.png 130×130): the family's wave
-// in tan on the near-black canvas. Placeholder until Wavelane has its own mark.
+// in tan on the near-black canvas, drawn like Wavetile's app icon. Placeholder until Wavelane has its own mark.
 // Run: npm run icons
 import { deflateSync, crc32 } from "node:zlib";
 import { writeFileSync } from "node:fs";
@@ -16,21 +16,49 @@ function chunk(type, data) {
   return out;
 }
 
+// The wave mark's own curve (the path in src/design/components/Mark.tsx and Wavetile's icon), as
+// cubic segments on a 90 × 16 box, sampled into points once.
+const CURVE = [
+  [1, 7.9, 6, -1.3, 11, -1.3, 16, 7.9],
+  [16, 7.9, 20.5, 15.3, 25.5, 15.3, 31, 7.9],
+  [31, 7.9, 36, 0.5, 41, 0.5, 46, 7.9],
+  [46, 7.9, 51.3, 16.1, 56.3, 16.1, 61, 7.9],
+  [61, 7.9, 66, -0.3, 71, -0.3, 76, 7.9],
+  [76, 7.9, 80.6, 14.9, 85.6, 14.9, 91, 7.9],
+];
+const STEPS = 400;
+const POINTS = CURVE.flatMap(([x0, y0, x1, y1, x2, y2, x3, y3]) =>
+  Array.from({ length: STEPS }, (_, i) => {
+    const t = i / STEPS;
+    const u = 1 - t;
+    return [
+      u ** 3 * x0 + 3 * u * u * t * x1 + 3 * u * t * t * x2 + t ** 3 * x3,
+      u ** 3 * y0 + 3 * u * u * t * y1 + 3 * u * t * t * y2 + t ** 3 * y3,
+    ];
+  }),
+);
+POINTS.push([91, 7.9]);
+
+// Same proportions as Wavetile's app icon: the wave fills 76% of the width and the line is
+// about 1.8% of the icon (a thin line, not the favicon's heavy one).
+const WIDTH = 0.76;
+const STROKE = 0.0176;
+
 function png(size) {
-  const margin = size * 0.14;
-  const amplitude = size * 0.075;
-  const half = size * 0.035; // half the stroke width
-  const waves = 3;
-  const k = (2 * Math.PI * waves) / (size - 2 * margin);
+  const scale = (size * WIDTH) / 90;
+  const left = (size - 90 * scale) / 2 - 1 * scale;
+  const top = size / 2 - 7.9 * scale;
+  const dots = POINTS.map(([x, y]) => [left + x * scale, top + y * scale]);
+  const half = size * STROKE * 0.5;
   const rows = Buffer.alloc(size * (size * 3 + 1));
   for (let y = 0; y < size; y++) {
     const row = y * (size * 3 + 1);
     for (let x = 0; x < size; x++) {
-      // Distance to the nearest point of the curve, sampled along it (round caps for free).
+      // Distance to the nearest point of the curve (round caps for free).
       let nearest = Infinity;
-      for (let cx = margin; cx <= size - margin; cx += 0.25) {
-        const cy = size / 2 - amplitude * Math.sin((cx - margin) * k);
-        nearest = Math.min(nearest, Math.hypot(x + 0.5 - cx, y + 0.5 - cy));
+      for (const [cx, cy] of dots) {
+        const d = Math.hypot(x + 0.5 - cx, y + 0.5 - cy);
+        if (d < nearest) nearest = d;
       }
       const cover = Math.max(0, Math.min(1, half - nearest + 0.5));
       for (let c = 0; c < 3; c++) {

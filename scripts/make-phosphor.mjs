@@ -23,6 +23,7 @@ const ICONS = [
   "eye",
   "film-reel",
   "film-strip",
+  "balloon",
   "bookmark-simple",
   "qr-code",
   "star",

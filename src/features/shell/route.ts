@@ -3,7 +3,7 @@
 import { signal } from "@preact/signals";
 import type { SubChoice } from "../../subtitles/choice";
 
-export type Tab = "home" | "movies" | "shows" | "search" | "account";
+export type Tab = "home" | "movies" | "shows" | "kids" | "search" | "account";
 
 export interface Page {
   id: string;

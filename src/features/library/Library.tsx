@@ -1,3 +1,4 @@
+import type { ComponentChildren } from "preact";
 import { useMemo, useRef, useState } from "preact/hooks";
 import type { Session } from "../../api/auth";
 import { everything } from "../../api/library";
@@ -24,9 +25,9 @@ const loaders: Record<Kind, (session: Session) => ReturnType<typeof everything>>
   Kids: (session) => everything(session, "Series"),
 };
 
-/// Movies or Shows: the whole library as a poster grid, with the order and filters chosen from
+/// Movies or Shows (or Kids, which brings its own `intro` shelves above the grid): the whole library as a poster grid, with the order and filters chosen from
 /// the row above it. The choice is remembered per library.
-export function Library({ type }: { type: Kind }) {
+export function Library({ type, intro, hero, after }: { type: Kind; intro?: ComponentChildren; hero?: boolean; after?: ComponentChildren }) {
   const screen = useRef<HTMLDivElement>(null);
   const library = useResource(`all:${type === "Movie" ? "Movie" : "Series"}`, loaders[type]);
   const choices = overrides.value;
@@ -82,10 +83,11 @@ export function Library({ type }: { type: Kind }) {
 
   return (
     <>
-      <div ref={screen} class="screen" data-scroll="y">
+      <div ref={screen} class={hero ? "screen has-hero" : "screen"} data-scroll="y">
+        {intro}
         <header class="screen-head" data-scroll-anchor>
           <div class="title-row">
-            <h1 class="display">{type === "Movie" ? "Movies" : type === "Kids" ? "Kids" : "Shows"}</h1>
+            <h1 class="display">{type === "Movie" ? "Movies" : type === "Kids" ? "All kids' shows" : "Shows"}</h1>
             {all && <span class="mono secondary">{shown.length === all.length ? all.length : `${shown.length} of ${all.length}`}</span>}
           </div>
           <div class="row" data-focus-group>
@@ -111,7 +113,7 @@ export function Library({ type }: { type: Kind }) {
           </div>
         </header>
 
-        {all && shown.length > 0 && <Grid items={shown} onOpen={openItem} />}
+        {all && shown.length > 0 && <Grid items={shown} onOpen={openItem} autoFocus={!hero} />}
         {all && shown.length === 0 && (
           <Status title={isFiltered(view) ? `No ${noun} match these filters` : `No ${noun} in the library yet`}>
             {isFiltered(view) && (
@@ -125,6 +127,7 @@ export function Library({ type }: { type: Kind }) {
       </div>
       {/* Outside the scrolling screen, so moving through the drawer never scrolls what is under it. */}
       {menu && <Menu title={menu.title} options={menu.options} value={menu.value} onPick={menu.pick} onClose={() => setPicking(null)} />}
+      {after}
     </>
   );
 }

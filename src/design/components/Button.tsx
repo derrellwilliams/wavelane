@@ -1,5 +1,6 @@
 import type { ComponentChildren } from "preact";
 import type { IconName } from "../icons.gen";
+import { useHold } from "../../nav/hold";
 import { Icon } from "./Icon";
 
 interface Props {
@@ -12,10 +13,15 @@ interface Props {
   disabled?: boolean;
   /// A toggle that is switched on (a filter in use, "Watched"). Leave unset for plain buttons.
   on?: boolean;
+  /// Called when OK (or the pointer) is held down; a short press still calls `onPress`.
+  onHold?: () => void;
 }
 
 /// The app's one button. Focus (remote or pointer) inverts it to a tan fill.
-export function Button({ children, onPress, icon, autoFocus, disabled, on }: Props) {
+export function Button({ children, onPress, icon, autoFocus, disabled, on, onHold }: Props) {
+  const press = useHold(onHold, () => {
+    if (!disabled) onPress();
+  });
   return (
     <button
       class="button"
@@ -25,9 +31,7 @@ export function Button({ children, onPress, icon, autoFocus, disabled, on }: Pro
       tabIndex={-1}
       aria-disabled={disabled || undefined}
       aria-pressed={on}
-      onClick={() => {
-        if (!disabled) onPress();
-      }}
+      {...press}
     >
       {icon && <Icon name={icon} />}
       {children}

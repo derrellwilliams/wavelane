@@ -50,11 +50,11 @@ export async function everything(session: Session, type: "Movie" | "Series"): Pr
   return items;
 }
 
-export const resume = (session: Session) =>
-  list(session, "/UserItems/Resume", { mediaTypes: "Video", limit: SHELF, fields: SHELF_FIELDS });
+export const resume = (session: Session, limit = SHELF) =>
+  list(session, "/UserItems/Resume", { mediaTypes: "Video", limit, fields: SHELF_FIELDS });
 
-export const nextUp = (session: Session) =>
-  list(session, "/Shows/NextUp", { limit: SHELF, fields: SHELF_FIELDS, enableResumable: "false" });
+export const nextUp = (session: Session, limit = SHELF) =>
+  list(session, "/Shows/NextUp", { limit, fields: SHELF_FIELDS, enableResumable: "false" });
 
 export const latest = (session: Session, type: "Movie" | "Series") =>
   list(session, "/Items/Latest", { includeItemTypes: type, limit: SHELF, fields: SHELF_FIELDS, groupItems: "true" });
@@ -71,6 +71,16 @@ export const favorites = (session: Session) =>
 
 export const collections = (session: Session) =>
   list(session, "/Items", { includeItemTypes: "BoxSet", recursive: "true", sortBy: "SortName", limit: "100" });
+
+/// Forgets where you were in a film or episode, which takes it off Continue Watching. Whether it
+/// counts as watched is left alone.
+export async function clearProgress(session: Session, id: string): Promise<void> {
+  await request<unknown>(connectionOf(session), `/UserItems/${id}/UserData`, {
+    method: "POST",
+    query: { userId: session.userId },
+    body: { PlaybackPositionTicks: 0 },
+  });
+}
 
 export async function item(session: Session, id: string): Promise<Item> {
   const found = toItem(await get(session, `/Items/${id}`, { fields: DETAIL_FIELDS }));

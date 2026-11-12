@@ -5,7 +5,7 @@ import type { Average } from "../../letterboxd/average";
 import { looksKids } from "../kids/kids";
 import { watched, type Marks } from "../library/arrange";
 
-export const SPOTLIGHT_COUNT = 12;
+export const SPOTLIGHT_COUNT = 8;
 
 /// Movies not yet watched (by Letterboxd once a log is loaded, else by Jellyfin) with a known
 /// average and a backdrop, highest average first. Children's movies are left out.

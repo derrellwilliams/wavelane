@@ -1,116 +1,186 @@
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
+import { episodeCode } from "../../api/items";
 import type { Session } from "../../api/auth";
-import { episodeCode, type Item } from "../../api/items";
-import { collections, everything, favorites, latest, nextUp, resume } from "../../api/library";
+import { everything, favorites, nextUp, resume } from "../../api/library";
 import { Button } from "../../design/components/Button";
 import { useResource } from "../../data/resource";
+import { averages } from "../../letterboxd/average";
 import { useMarks } from "../../letterboxd/marks";
-import type { Seen } from "../../letterboxd/log";
+import { withoutDismissed } from "../browse/dismissed";
 import { Hero } from "../browse/Hero";
+import { useRemoveFromContinue } from "../browse/RemoveFromContinue";
 import { ItemShelf } from "../browse/Shelf";
 import { Status, Unreachable } from "../browse/Status";
-import { openItem, play } from "../shell/route";
-import { looksKids, useKids } from "../kids/kids";
-import { averages } from "../../letterboxd/average";
-import { topUnwatched } from "./spotlight";
+import { isKidsShow, looksKids, useKids } from "../kids/kids";
 import { useEnter } from "../shell/enter";
+import { openItem, play } from "../shell/route";
+import { recentlyAdded, unwatchedMovies } from "./shelves";
+import { topUnwatched } from "./spotlight";
 
-/// How long each pick of the rotation stays up.
+/// How long each pick of the carousel stays up before the next one.
 const SPOTLIGHT_MS = 12_000;
 
-const latestMovies = (session: Session) => latest(session, "Movie");
 const allMovies = (session: Session) => everything(session, "Movie");
-const latestShows = (session: Session) => latest(session, "Series");
 
-function pick(library: Item[] | undefined, marks: ReturnType<typeof useMarks>, keep: (mark: Seen) => boolean, order: (a: Seen, b: Seen) => number): Item[] | undefined {
-  if (!library || marks.size === 0) return undefined;
-  return library
-    .filter((item) => {
-      const mark = marks.get(item.id);
-      return !!mark && keep(mark);
-    })
-    .sort((a, b) => order(marks.get(a.id)!, marks.get(b.id)!))
-    .slice(0, 20);
-}
-
-/// Home: a spotlight on what to watch next, then shelves. Each shelf loads on its own from the
-/// last visit's copy and refreshes behind it; a shelf with nothing in it isn't drawn.
+/// Home: a spotlight, then four shelves. The spotlight is what you were watching, else a carousel
+/// of the best-liked movies you haven't seen. Each shelf loads on its own from the last visit's
+/// copy and refreshes behind it; a shelf with nothing in it isn't drawn. Kids' shows live on the
+/// Kids tab and stay off Home.
 export function Home() {
   const screen = useRef<HTMLDivElement>(null);
   const watching = useResource("resume", resume);
   const next = useResource("nextup", nextUp);
-  const movies = useResource("latest:Movie", latestMovies);
-  const shows = useResource("latest:Series", latestShows);
-  const sets = useResource("collections", collections);
   const loved = useResource("favorites", favorites);
-  // Kids' shows live on their own tab, so they stay off Home.
-  const kids = useKids();
-  const watchingNow = kids.without(watching.data);
-  const nextNow = kids.without(next.data);
-  const showsNow = kids.without(shows.data);
-  const lovedNow = kids.without(loved.data);
-
   const library = useResource("all:Movie", allMovies);
+  const kids = useKids();
   const marks = useMarks(library.data);
-  // Films you logged most recently, and the ones you mean to see, among the library's movies.
-  const lately = useMemo(() => pick(library.data, marks, (mark) => !!mark.last, (a, b) => (b.last ?? "").localeCompare(a.last ?? "")), [library.data, marks]);
-  const planned = useMemo(() => pick(library.data, marks, (mark) => mark.watchlist, () => 0), [library.data, marks]);
-
-  // With nothing to continue, the spotlight takes turns over the best-liked movies not yet seen.
   const known = averages.value;
-  const top = useMemo(() => topUnwatched(library.data, marks, known), [library.data, marks, known]);
-  const [turn, setTurn] = useState(0);
-  useEffect(() => {
-    if (top.length < 2) return;
-    const timer = setInterval(() => setTurn((now) => now + 1), SPOTLIGHT_MS);
-    return () => clearInterval(timer);
-  }, [top.length]);
 
-  const all = [watching, next, movies, shows, sets, loved];
-  const lists = [watchingNow, nextNow, movies.data, showsNow, sets.data, lovedNow].map((list) => list ?? []);
+  const remove = useRemoveFromContinue();
+  const continuing = withoutDismissed(kids.without(watching.data));
+  const upNext = kids.without(next.data);
+  const favorite = kids.without(loved.data);
+  const unseen = useMemo(
+    () => unwatchedMovies(library.data, marks, known),
+    [library.data, marks, known],
+  );
+  const added = useMemo(
+    () =>
+      recentlyAdded(
+        library.data,
+        kids.shows?.filter((show) => !isKidsShow(show, kids.choices)),
+      ),
+    [library.data, kids.shows, kids.choices],
+  );
+
+  // Something to continue wins; a kids' movie in progress doesn't count. While the kids' list is
+  // still loading, the spotlight waits rather than flashing the wrong thing.
+  const resuming = continuing?.find(
+    (item) => !(item.type === "Movie" && looksKids(item)),
+  );
+  const pending = !!watching.data?.length && continuing === undefined;
+  const top = useMemo(
+    () => topUnwatched(library.data, marks, known),
+    [library.data, marks, known],
+  );
+  const carousel = resuming || pending ? [] : top;
+  const [turn, setTurn] = useState(0);
+  const at = carousel.length ? turn % carousel.length : 0;
+  useEffect(() => {
+    if (carousel.length < 2) return;
+    const timer = setTimeout(() => setTurn(at + 1), SPOTLIGHT_MS);
+    return () => clearTimeout(timer);
+  }, [carousel.length, at]);
+  const step = (by: number) =>
+    setTurn((at + by + carousel.length) % carousel.length);
+
+  const all = [watching, next, loved, library];
   const ready = all.some((shelf) => shelf.data !== undefined);
-  const settled = all.every((shelf) => shelf.data !== undefined || shelf.failed);
-  const empty = lists.every((list) => list.length === 0);
+  const settled = all.every(
+    (shelf) => shelf.data !== undefined || shelf.failed,
+  );
+  const empty = [continuing, upNext, favorite, unseen, added].every(
+    (list) => !list?.length,
+  );
   useEnter(screen, ready && !empty);
   useEnter(screen, settled && empty);
 
-  // Children's movies being watched don't take the spotlight either.
-  const resuming = watchingNow?.find((item) => !(item.type === "Movie" && looksKids(item)));
-  const spotlight: Item | undefined =
-    resuming ?? nextNow?.[0] ?? top[turn % Math.max(top.length, 1)] ?? movies.data?.find((item) => item.backdrop) ?? movies.data?.[0] ?? showsNow?.[0];
+  const spotlight = pending
+    ? undefined
+    : (resuming ??
+      carousel[at] ??
+      added.find((item) => item.backdrop) ??
+      added[0]);
   const kicker = !spotlight
     ? undefined
     : spotlight === resuming
-      ? "Continue watching"
-      : spotlight.type === "Episode"
-        ? `Next up${episodeCode(spotlight) ? `  ·  ${episodeCode(spotlight)}` : ""}`
-        : top.includes(spotlight)
-          ? "Top rated on Letterboxd  ·  not watched yet"
-          : "Recently added";
+      ? spotlight.type === "Episode" && episodeCode(spotlight)
+        ? `Continue watching  ·  ${episodeCode(spotlight)}`
+        : "Continue watching"
+      : carousel.length
+        ? `Top rated on Letterboxd, not watched yet  ·  ${at + 1} of ${carousel.length}`
+        : "Recently added";
 
   return (
-    <div ref={screen} class="screen has-hero" data-scroll="y">
-      {spotlight && (
-        <Hero item={spotlight} kicker={kicker} average={spotlight.tmdb ? known.get(spotlight.tmdb)?.rating : undefined}>
-          {(spotlight.type === "Movie" || spotlight.type === "Episode") && (
-            <Button icon="play" onPress={() => play(spotlight.id, !!spotlight.progress)} autoFocus>
-              {spotlight.progress ? "Resume" : "Play"}
+    <>
+      <div ref={screen} class="screen has-hero" data-scroll="y">
+        {spotlight && (
+          <Hero
+            item={spotlight}
+            kicker={kicker}
+            average={
+              spotlight.tmdb ? known.get(spotlight.tmdb)?.rating : undefined
+            }
+          >
+            {(spotlight.type === "Movie" || spotlight.type === "Episode") && (
+              <Button
+                icon="play"
+                onPress={() => play(spotlight.id, !!spotlight.progress)}
+                onHold={
+                  spotlight === resuming
+                    ? () => remove.ask(spotlight)
+                    : undefined
+                }
+                autoFocus
+              >
+                {spotlight.progress ? "Resume" : "Play"}
+              </Button>
+            )}
+            <Button
+              icon="arrow-right"
+              onPress={() => openItem(spotlight)}
+              autoFocus={
+                spotlight.type !== "Movie" && spotlight.type !== "Episode"
+              }
+            >
+              Details
             </Button>
-          )}
-          <Button icon="arrow-right" onPress={() => openItem(spotlight)} autoFocus={spotlight.type !== "Movie" && spotlight.type !== "Episode"}>
-            Details
-          </Button>
-        </Hero>
-      )}
-      <ItemShelf title="Continue Watching" items={watchingNow} shape="thumb" onOpen={openItem} />
-      <ItemShelf title="Next Up" items={nextNow} shape="thumb" onOpen={openItem} />
-      <ItemShelf title="Recently Added Movies" items={movies.data} shape="poster" onOpen={openItem} />
-      <ItemShelf title="Recently Added Shows" items={showsNow} shape="poster" onOpen={openItem} />
-      <ItemShelf title="Recently watched on Letterboxd" items={lately} shape="poster" onOpen={openItem} />
-      <ItemShelf title="On your Letterboxd watchlist" items={planned} shape="poster" onOpen={openItem} />
-      <ItemShelf title="Collections" items={sets.data} shape="poster" onOpen={openItem} />
-      <ItemShelf title="Favorites" items={lovedNow} shape="poster" onOpen={openItem} />
-      {settled && empty && (all.every((shelf) => shelf.failed) ? <Unreachable /> : <Status title="Nothing in the library yet" />)}
-    </div>
+            {carousel.length > 1 && (
+              <>
+                <Button icon="arrow-left" onPress={() => step(-1)}>
+                  Previous
+                </Button>
+                <Button icon="arrow-right" onPress={() => step(1)}>
+                  Next
+                </Button>
+              </>
+            )}
+          </Hero>
+        )}
+        <ItemShelf
+          title="Not Watched Movies"
+          items={unseen}
+          shape="poster"
+          onOpen={openItem}
+        />
+        <ItemShelf
+          title="Up Next"
+          items={upNext}
+          shape="thumb"
+          onOpen={openItem}
+        />
+        <ItemShelf
+          title="Recently Added"
+          items={added}
+          shape="poster"
+          onOpen={openItem}
+        />
+        <ItemShelf
+          title="Favorites"
+          items={favorite}
+          shape="poster"
+          onOpen={openItem}
+        />
+        {settled &&
+          empty &&
+          (all.every((shelf) => shelf.failed) ? (
+            <Unreachable />
+          ) : (
+            <Status title="Nothing in the library yet" />
+          ))}
+      </div>
+      {/* Outside the scrolling screen, so moving through the drawer never scrolls what is under it. */}
+      {remove.menu}
+    </>
   );
 }

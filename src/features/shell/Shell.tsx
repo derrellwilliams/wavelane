@@ -12,6 +12,7 @@ import { useBack } from "../../nav/hooks";
 import { Account } from "../account/Account";
 import { Detail } from "../detail/Detail";
 import { Home } from "../home/Home";
+import { KidsHome } from "../kids/KidsHome";
 import { Library } from "../library/Library";
 import { Search } from "../search/Search";
 import "../browse/browse.css";
@@ -116,7 +117,7 @@ export function Shell({ session, onSetupCheck, onSignOut }: Props) {
         {current === "home" && <Home />}
         {current === "movies" && <Library key="Movie" type="Movie" />}
         {current === "shows" && <Library key="Series" type="Series" />}
-        {current === "kids" && <Library key="Kids" type="Kids" />}
+        {current === "kids" && <KidsHome />}
         {current === "search" && <Search />}
         {current === "account" && <Account session={session} onSetupCheck={onSetupCheck} onSignOut={onSignOut} />}
       </div>

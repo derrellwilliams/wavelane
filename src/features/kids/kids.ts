@@ -93,5 +93,11 @@ export function useKids() {
       if (!known && !shows.failed && items.some((item) => item.type !== "Series" && item.type !== "Movie")) return undefined;
       return items.filter((item) => !inKids(item, ids ?? new Set(), choices));
     },
+    /// Only the kids' shows and their episodes (the Kids tab's own shelves).
+    only(items: Item[] | undefined): Item[] | undefined {
+      if (!items) return items;
+      if (!known && !shows.failed && items.some((item) => item.type !== "Series")) return undefined;
+      return items.filter((item) => inKids(item, ids ?? new Set(), choices));
+    },
   };
 }

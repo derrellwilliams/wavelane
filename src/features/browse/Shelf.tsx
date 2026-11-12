@@ -20,16 +20,18 @@ interface Props {
   items: Item[] | undefined;
   shape: "poster" | "thumb";
   onOpen: (item: Item) => void;
+  /// Hold OK on a card (Continue Watching uses it to remove an item).
+  onHold?: (item: Item) => void;
   ownTitle?: boolean;
 }
 
 /// A shelf of items. Draws nothing while it has nothing to show, so empty shelves don't appear.
-export function ItemShelf({ title, items, shape, onOpen, ownTitle }: Props) {
+export function ItemShelf({ title, items, shape, onOpen, onHold, ownTitle }: Props) {
   if (!items?.length) return null;
   return (
     <Shelf title={title}>
       {items.map((item) => (
-        <ItemCard key={item.id} item={item} shape={shape} onOpen={onOpen} ownTitle={ownTitle} />
+        <ItemCard key={item.id} item={item} shape={shape} onOpen={onOpen} onHold={onHold} ownTitle={ownTitle} />
       ))}
     </Shelf>
   );

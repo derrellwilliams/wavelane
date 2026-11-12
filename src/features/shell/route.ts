@@ -2,6 +2,7 @@
 /// Kept in signals (not component state) so it survives the setup check and screen swaps.
 import { signal } from "@preact/signals";
 import type { SubChoice } from "../../subtitles/choice";
+import { undismiss } from "../browse/dismissed";
 
 export type Tab = "home" | "movies" | "shows" | "kids" | "search" | "account";
 
@@ -20,6 +21,7 @@ export const pages = signal<Page[]>([]);
 export const playing = signal<{ id: string; resume: boolean; subtitle?: SubChoice } | null>(null);
 
 export function play(id: string, resume: boolean, subtitle?: SubChoice): void {
+  undismiss(id);
   playing.value = { id, resume, subtitle };
 }
 

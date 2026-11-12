@@ -8,7 +8,7 @@ const SPARE_ROWS = 2;
 
 /// The poster grid for a whole library. Only the rows near the screen exist (see rows.ts); the
 /// grid keeps its full height so scrolling behaves as if they all did.
-export function Grid({ items, onOpen }: { items: Item[]; onOpen: (item: Item) => void }) {
+export function Grid({ items, onOpen, autoFocus = true }: { items: Item[]; onOpen: (item: Item) => void; autoFocus?: boolean }) {
   const grid = useRef<HTMLDivElement>(null);
   const columns = Math.max(1, Math.round(token("--grid-columns")));
   const pitch = token("--poster-h") + token("--card-art-gap") + token("--card-caption") + token("--card-gap");
@@ -53,7 +53,7 @@ export function Grid({ items, onOpen }: { items: Item[]; onOpen: (item: Item) =>
       }}
     >
       {items.slice(start, (rows.last + 1) * columns).map((item, offset) => (
-        <ItemCard key={item.id} item={item} shape="poster" onOpen={onOpen} index={start + offset} autoFocus={start + offset === 0} />
+        <ItemCard key={item.id} item={item} shape="poster" onOpen={onOpen} index={start + offset} autoFocus={autoFocus && start + offset === 0} />
       ))}
     </div>
   );

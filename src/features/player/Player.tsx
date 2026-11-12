@@ -1,0 +1,522 @@
+import { useCallback, useEffect, useRef, useState } from "preact/hooks";
+import type { Session } from "../../api/auth";
+import { episodeCode, type Item } from "../../api/items";
+import { episodeAfter, item as fetchItem } from "../../api/library";
+import { session as current } from "../../api/session";
+import { load } from "../../api/storage";
+import { refreshAll } from "../../data/resource";
+import { Button } from "../../design/components/Button";
+import { Icon } from "../../design/components/Icon";
+import { Menu } from "../../design/components/Menu";
+import { focusIfUsable, onKey, pushScope } from "../../nav/focus";
+import { useBack } from "../../nav/hooks";
+import { plan, PlaybackError, reportProgress, reportStart, reportStop, segments as fetchSegments, trickplay as fetchTrickplay, trickplayUrl, type Plan, type Report } from "../../player/playback";
+import { activeSegment, skipLabel, type Segment } from "../../player/segments";
+import { clock, scrubTarget } from "../../player/scrub";
+import type { TrickInfo } from "../../player/trickplay";
+import { thumbAt } from "../../player/trickplay";
+
+interface Props {
+  id: string;
+  /// Start where it was left rather than from the beginning.
+  resume: boolean;
+  onClose: () => void;
+  /// Another episode takes over (autoplay, or "Play now").
+  onNext: (id: string) => void;
+}
+
+const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
+const OSD_MS = 5000;
+const SCRUB_COMMIT_MS = 500;
+const PROGRESS_MS = 10000;
+const DIM_AFTER_MS = 60000;
+const NEXT_WITHIN = 20;
+const LEAVE_WAIT_MS = 1500;
+
+const KEY = { left: 37, up: 38, right: 39, down: 40, ok: 13, play: 415, pause: 19, toggle: 10252, stop: 413, rewind: 412, forward: 417 };
+
+type Menus = "audio" | "speed" | null;
+
+/// Full-screen playback. The OSD (title, controls, seek bar) shows on Up, Down, a pointer move or
+/// a pause and hides itself; while it is hidden Left and Right seek and OK pauses. Progress goes
+/// to the server every 10 s, on pause and seek, and when leaving.
+export function Player({ id, resume, onClose, onNext }: Props) {
+  // Handlers registered with the focus engine must keep one identity, so the parent's callbacks
+  // are reached through refs.
+  const closer = useRef(onClose);
+  closer.current = onClose;
+  const advance = useRef(onNext);
+  advance.current = onNext;
+  const root = useRef<HTMLDivElement>(null);
+  const video = useRef<HTMLVideoElement>(null);
+  const [item, setItem] = useState<Item | null>(null);
+  const [active, setActive] = useState<Plan | null>(null);
+  const [error, setError] = useState("");
+  const [start, setStart] = useState(0);
+  const [segs, setSegs] = useState<Segment[]>([]);
+  const [trick, setTrick] = useState<TrickInfo | null>(null);
+  const [next, setNext] = useState<Item | null>(null);
+  const [skippedNext, setSkippedNext] = useState(false);
+
+  const [time, setTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const [waiting, setWaiting] = useState(true);
+  const [osd, setOsd] = useState(false);
+  const [scrub, setScrub] = useState<number | null>(null);
+  const [speed, setSpeed] = useState(1);
+  const [menu, setMenu] = useState<Menus>(null);
+  const [stats, setStats] = useState(false);
+  const [dim, setDim] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+
+  // Latest values for handlers that outlive a render.
+  const live = useRef({ time: 0, duration: 0, paused: false, osd: false, scrub: null as number | null, plan: null as Plan | null, leaving: false, next: null as Item | null, prompt: null as (() => void) | null, retried: false });
+  live.current.time = time;
+  live.current.duration = duration;
+  live.current.paused = paused;
+  live.current.osd = osd;
+  live.current.scrub = scrub;
+  live.current.plan = active;
+  live.current.leaving = leaving;
+  live.current.next = skippedNext ? null : next;
+
+  const autoplay = load("autoplayNext") !== "off";
+
+  const report = useCallback((): Report | null => {
+    const now = live.current;
+    return now.plan && { itemId: id, sourceId: now.plan.source.id, playSessionId: now.plan.playSessionId, method: now.plan.method, seconds: now.time, paused: now.paused, audioIndex: now.plan.audioIndex };
+  }, [id]);
+
+  const progress = useCallback(() => {
+    if (live.current.leaving) return; // a late pause event must not follow the stop report
+    const user = current.value;
+    const body = report();
+    if (user && body) void reportProgress(user, body);
+  }, [report]);
+
+  /// Stops reporting, then runs `then` (once the server has the position, or after a short wait).
+  const leave = useCallback(
+    (then: () => void) => {
+      if (live.current.leaving) return;
+      live.current.leaving = true;
+      setLeaving(true);
+      video.current?.pause();
+      const user = current.value;
+      const body = report();
+      const sent = user && body ? reportStop(user, body) : Promise.resolve();
+      void Promise.race([sent, new Promise((resolve) => setTimeout(resolve, LEAVE_WAIT_MS))]).then(() => {
+        refreshAll();
+        then();
+      });
+    },
+    [report],
+  );
+
+  const close = useCallback(() => leave(() => closer.current()), [leave]);
+
+  // Back hides the OSD first, then leaves.
+  const back = useCallback(() => {
+    if (live.current.osd && !live.current.paused) setOsd(false);
+    else close();
+  }, [close]);
+  useBack(back);
+
+  useEffect(() => (root.current ? pushScope(root.current) : undefined), []);
+
+  // Load what to play.
+  const begin = useCallback(
+    async (user: Session, seconds: number, options: { audioIndex?: number; transcode?: boolean } = {}) => {
+      try {
+        const made = await plan(user, id, { startSeconds: seconds, ...options });
+        setStart(seconds);
+        setActive(made);
+        setWaiting(true);
+        return made;
+      } catch (failure) {
+        setError(failure instanceof PlaybackError ? failure.message : "Couldn't start playback. Check the server and try again.");
+        return null;
+      }
+    },
+    [id],
+  );
+
+  useEffect(() => {
+    const user = current.value;
+    if (!user) return;
+    let gone = false;
+    void (async () => {
+      let found: Item;
+      try {
+        found = await fetchItem(user, id);
+      } catch {
+        if (!gone) setError("Couldn't load this from the server.");
+        return;
+      }
+      if (gone) return;
+      setItem(found);
+      const made = await begin(user, resume ? (found.resumeSeconds ?? 0) : 0);
+      if (!made || gone) return;
+      void reportStart(user, { itemId: id, sourceId: made.source.id, playSessionId: made.playSessionId, method: made.method, seconds: resume ? (found.resumeSeconds ?? 0) : 0, paused: false, audioIndex: made.audioIndex });
+      void fetchSegments(user, id).then((list) => !gone && setSegs(list));
+      void fetchTrickplay(user, id, made.source.id).then((info) => !gone && setTrick(info));
+      if (found.type === "Episode") void episodeAfter(user, found).then((after) => !gone && setNext(after)).catch(() => undefined);
+    })();
+    return () => {
+      gone = true;
+    };
+  }, [id]);
+
+  // Progress every 10 s while playing.
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (!live.current.paused && live.current.plan) progress();
+    }, PROGRESS_MS);
+    return () => clearInterval(timer);
+  }, [progress]);
+
+  // The OSD hides itself while playing.
+  const osdTimer = useRef(0);
+  const wake = useCallback(() => {
+    setOsd(true);
+    setDim(false);
+    clearTimeout(osdTimer.current);
+    osdTimer.current = window.setTimeout(() => {
+      if (!live.current.paused && live.current.scrub === null) setOsd(false);
+    }, OSD_MS);
+  }, []);
+  useEffect(() => () => clearTimeout(osdTimer.current), []);
+  useEffect(() => {
+    if (paused) {
+      setOsd(true);
+      const timer = setTimeout(() => setDim(true), DIM_AFTER_MS);
+      return () => clearTimeout(timer);
+    }
+    setDim(false);
+    wake();
+  }, [paused]);
+
+  // When the OSD appears, focus lands on the play button; when it goes, focus is nowhere (keys
+  // are handled by the capture below).
+  useEffect(() => {
+    if (osd && !menu) {
+      if (!root.current?.contains(document.activeElement) || document.activeElement === root.current) focusIfUsable(root.current?.querySelector("[data-play]"));
+    } else if (!osd && !menu) {
+      (document.activeElement as HTMLElement | null)?.blur();
+    }
+  }, [osd, menu]);
+
+  const seekTo = (seconds: number) => {
+    const element = video.current;
+    if (!element) return;
+    element.currentTime = Math.max(0, Math.min(seconds, (live.current.duration || seconds) - 1));
+    setTime(element.currentTime);
+    setTimeout(progress, 300);
+  };
+
+  const toggle = () => {
+    const element = video.current;
+    if (!element) return;
+    if (element.paused) void element.play().catch(() => undefined);
+    else element.pause();
+  };
+
+  const scrubTimer = useRef(0);
+  const scrubBy = (direction: -1 | 1, repeat: number) => {
+    const base = live.current.scrub ?? live.current.time;
+    const target = scrubTarget(base, direction, repeat, live.current.duration);
+    live.current.scrub = target;
+    setScrub(target);
+    wake();
+    clearTimeout(scrubTimer.current);
+    scrubTimer.current = window.setTimeout(() => {
+      live.current.scrub = null;
+      setScrub(null);
+      seekTo(target);
+    }, SCRUB_COMMIT_MS);
+  };
+  useEffect(() => () => clearTimeout(scrubTimer.current), []);
+
+  const playNext = useCallback(
+    (target: Item) => {
+      leave(() => advance.current(target.id));
+    },
+    [leave],
+  );
+
+  // What the OK button does when a prompt (Skip Intro, Up next) is showing.
+  const segment = activeSegment(segs, time);
+  const remaining = duration - time;
+  const showNext = !!next && !skippedNext && duration > 120 && remaining <= NEXT_WITHIN && remaining > 0;
+  const skip = () => {
+    if (!segment) return;
+    if (segment.kind === "Outro" && next && !skippedNext && segment.end >= duration - 3) playNext(next);
+    else seekTo(segment.end);
+  };
+  live.current.prompt = showNext ? () => playNext(next!) : segment ? skip : null;
+
+  // Keys: seeking, pausing and the media keys, before the focus engine sees them.
+  useEffect(
+    () =>
+      onKey((event) => {
+        const now = live.current;
+        if (now.leaving) {
+          event.preventDefault();
+          return true;
+        }
+        const code = event.keyCode;
+        const take = () => {
+          event.preventDefault();
+          return true;
+        };
+        if (code === KEY.play || code === KEY.pause || code === KEY.toggle) {
+          if (code === KEY.play && !video.current?.paused) return take();
+          if (code === KEY.pause && video.current?.paused) return take();
+          toggle();
+          return take();
+        }
+        if (code === KEY.stop) {
+          close();
+          return take();
+        }
+        if (code === KEY.forward || code === KEY.rewind) {
+          scrubBy(code === KEY.forward ? 1 : -1, event.repeat ? 12 : 0);
+          return take();
+        }
+        if (menuOpen.current) return false;
+        const seeking = code === KEY.left || code === KEY.right;
+        const onBar = document.activeElement?.hasAttribute("data-seekbar");
+        if (!now.osd) {
+          if (seeking) {
+            scrubBy(code === KEY.left ? -1 : 1, scrubRepeat(event));
+            return take();
+          }
+          if (code === KEY.up || code === KEY.down) {
+            wake();
+            return take();
+          }
+          if (code === KEY.ok) {
+            if (event.repeat) return take();
+            if (now.prompt) now.prompt();
+            else toggle();
+            return take();
+          }
+          return false;
+        }
+        wake();
+        if (onBar && seeking) {
+          scrubBy(code === KEY.left ? -1 : 1, scrubRepeat(event));
+          return take();
+        }
+        if (onBar && code === KEY.ok) {
+          if (!event.repeat) toggle();
+          return take();
+        }
+        return false;
+      }),
+    [],
+  );
+  const menuOpen = useRef(false);
+  menuOpen.current = menu !== null;
+  const repeats = useRef(0);
+  const scrubRepeat = (event: KeyboardEvent) => {
+    repeats.current = event.repeat ? repeats.current + 1 : 0;
+    return repeats.current;
+  };
+
+  // The audio track: switch inside the stream when the TV can, else ask the server for the
+  // stream again from where we are.
+  const chooseAudio = async (index: number) => {
+    const now = live.current.plan;
+    const user = current.value;
+    const element = video.current;
+    if (!now || !user || !element || index === now.audioIndex) return;
+    const position = now.source.audio.findIndex((track) => track.index === index);
+    const tracks = (element as HTMLVideoElement & { audioTracks?: { length: number; [i: number]: { enabled: boolean } } }).audioTracks;
+    if (now.method === "DirectPlay" && tracks && tracks.length === now.source.audio.length && position >= 0) {
+      for (let i = 0; i < tracks.length; i++) tracks[i]!.enabled = i === position;
+      live.current.plan = { ...now, audioIndex: index };
+      setActive(live.current.plan);
+      progress();
+      return;
+    }
+    await begin(user, live.current.time, { audioIndex: index, transcode: now.method === "Transcode" });
+  };
+
+  const onVideoError = async () => {
+    const user = current.value;
+    const now = live.current.plan;
+    if (!user || !now || live.current.leaving) return;
+    if (now.method === "DirectPlay" && !live.current.retried) {
+      live.current.retried = true;
+      await begin(user, live.current.time, { audioIndex: now.audioIndex, transcode: true });
+    } else {
+      setError("The TV couldn't play this. Try another version, or check the server's transcoding.");
+    }
+  };
+
+  const closeMenu = () => {
+    setMenu(null);
+    wake();
+  };
+  const element = video.current;
+  const shown = scrub ?? time;
+  const total = duration || active?.source.seconds || 0;
+  const fraction = total ? Math.min(1, Math.max(0, shown / total)) : 0;
+  const thumb = trick && current.value && active ? thumbAt(trick, shown) : null;
+  const thumbSrc = thumb && trick && current.value && active ? trickplayUrl(current.value, id, trick, active.source.id, thumb.sheet) : null;
+  const title = item?.type === "Episode" ? (item.seriesName ?? item.name) : (item?.name ?? "");
+  const subtitle = item?.type === "Episode" ? [episodeCode(item), item.name].filter(Boolean).join(" · ") : "";
+  const audioTracks = active?.source.audio ?? [];
+  const info = active && [active.method === "DirectPlay" ? "Direct play" : "Transcoding", active.source.container, active.source.video, active.source.audioCodec, active.source.bitrate ? `${(active.source.bitrate / 1e6).toFixed(1)} Mbps` : ""].filter(Boolean);
+
+  return (
+    <div ref={root} class={`player${osd || paused ? " has-osd" : ""}${dim ? " is-dim" : ""}`} onMouseMove={() => !leaving && !live.current.osd && wake()}>
+      {active && !leaving && (
+        <video
+          key={active.url}
+          ref={video}
+          class="player-video"
+          src={active.url}
+          autoPlay
+          playsInline
+          onLoadedMetadata={(event) => {
+            const v = event.currentTarget;
+            setDuration(Number.isFinite(v.duration) ? v.duration : 0);
+            if (start > 0) v.currentTime = start;
+            v.playbackRate = speed;
+          }}
+          onPlaying={() => setWaiting(false)}
+          onWaiting={() => setWaiting(true)}
+          onTimeUpdate={(event) => setTime(event.currentTarget.currentTime)}
+          onPlay={() => setPaused(false)}
+          onPause={() => {
+            setPaused(true);
+            progress();
+          }}
+          onSeeked={() => progress()}
+          onError={() => void onVideoError()}
+          onEnded={() => {
+            if (live.current.next && autoplay) playNext(live.current.next);
+            else close();
+          }}
+        />
+      )}
+      {waiting && !error && <div class="player-wait mono secondary">Loading</div>}
+
+      <div class="player-top" hidden={!(osd || paused) || !!error}>
+        <h1 class="section">{title}</h1>
+        {subtitle && <p class="secondary">{subtitle}</p>}
+        {stats && info && <p class="mono secondary">{info.join("  ·  ")}</p>}
+      </div>
+
+      <div class="player-bottom" hidden={!(osd || paused) || !!error}>
+        <div class="row player-buttons" data-focus-group>
+          <button class="button" type="button" data-focusable data-play tabIndex={-1} onClick={toggle}>
+            <Icon name={paused ? "play" : "pause"} />
+            {paused ? "Play" : "Pause"}
+          </button>
+          <Button icon="arrow-counter-clockwise" onPress={() => scrubBy(-1, 0)}>
+            10 s
+          </Button>
+          <Button icon="arrow-clockwise" onPress={() => scrubBy(1, 0)}>
+            10 s
+          </Button>
+          {audioTracks.length > 1 && (
+            <Button icon="speaker-high" onPress={() => setMenu("audio")}>
+              Audio
+            </Button>
+          )}
+          <Button icon="gauge" onPress={() => setMenu("speed")}>
+            {speed === 1 ? "Speed" : `${speed}×`}
+          </Button>
+          <Button icon="info" on={stats} onPress={() => setStats(!stats)}>
+            Stats
+          </Button>
+          {next && (
+            <Button icon="skip-forward" onPress={() => playNext(next)}>
+              Next episode
+            </Button>
+          )}
+        </div>
+        <div class="seek" data-focusable data-seekbar tabIndex={-1} onClick={(event) => {
+          const box = event.currentTarget.getBoundingClientRect();
+          if (total) seekTo(((event.clientX - box.left) / box.width) * total);
+        }}>
+          {thumb && thumbSrc && trick && (
+            <div class="seek-thumb" style={{ left: `${fraction * 100}%` }}>
+              <div class="seek-picture" style={{ width: `${trick.width}px`, height: `${trick.height}px`, backgroundImage: `url("${thumbSrc}")`, backgroundPosition: `-${thumb.x}px -${thumb.y}px` }} />
+            </div>
+          )}
+          <div class="seek-track">
+            <div class="seek-fill" style={{ transform: `scaleX(${fraction})` }} />
+          </div>
+        </div>
+        <div class="row player-times mono">
+          <span>{clock(shown)}</span>
+          <span class="secondary">-{clock(Math.max(0, total - shown))}</span>
+        </div>
+      </div>
+
+      {!error && (showNext || segment) && (
+        <div class="player-prompt row" data-focus-group>
+          {showNext && next ? (
+            <>
+              <div class="prompt-text">
+                <p class="secondary">Up next{episodeCode(next) ? `  ·  ${episodeCode(next)}` : ""}</p>
+                <p>{next.name}</p>
+                <p class="mono secondary">{autoplay ? `Playing in ${Math.ceil(remaining)}` : "Autoplay is off"}</p>
+              </div>
+              <Button icon="skip-forward" onPress={() => playNext(next)}>
+                Play now
+              </Button>
+              <Button icon="x" onPress={() => setSkippedNext(true)}>
+                Stay
+              </Button>
+            </>
+          ) : (
+            segment && (
+              <Button icon="skip-forward" onPress={skip}>
+                {skipLabel(segment.kind)}
+              </Button>
+            )
+          )}
+        </div>
+      )}
+
+      {error && (
+        <div class="player-error">
+          <h2 class="section">Can't play this</h2>
+          <p class="secondary">{error}</p>
+          <div class="row" data-focus-group>
+            <Button icon="arrow-left" onPress={close} autoFocus>
+              Back
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {menu === "audio" && active && (
+        <Menu
+          title="Audio"
+          options={audioTracks.map((track) => ({ id: String(track.index), label: track.label }))}
+          value={String(active.audioIndex ?? "")}
+          onPick={(value) => void chooseAudio(Number(value))}
+          onClose={closeMenu}
+        />
+      )}
+      {menu === "speed" && (
+        <Menu
+          title="Speed"
+          options={SPEEDS.map((value) => ({ id: String(value), label: value === 1 ? "Normal" : `${value}×` }))}
+          value={String(speed)}
+          onPick={(value) => {
+            setSpeed(Number(value));
+            if (element) element.playbackRate = Number(value);
+          }}
+          onClose={closeMenu}
+        />
+      )}
+    </div>
+  );
+}

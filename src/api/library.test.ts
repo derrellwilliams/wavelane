@@ -99,3 +99,23 @@ describe("marking", () => {
     expect(calls[0]!.query.get("userId")).toBe(USER);
   });
 });
+
+describe("episodes", () => {
+  const episode = (n: number) => ({ Id: n.toString(16).padStart(32, "0"), Type: "Episode", Name: `Ep ${n}`, SeriesId: ID });
+
+  it("finds the episode after the current one, and none after the last", async () => {
+    serve(() => ({ Items: [episode(1), episode(2), episode(3)] }));
+    const { episodeAfter } = await import("./library");
+    const { toItem } = await import("./items");
+    expect((await episodeAfter(SESSION, toItem(episode(2))!))?.name).toBe("Ep 3");
+    expect(await episodeAfter(SESSION, toItem(episode(3))!)).toBeNull();
+  });
+
+  it("plays the next-up episode of a show, else the first one", async () => {
+    const calls = serve(({ path }) => ({ Items: path === "/Shows/NextUp" ? [] : [episode(1)] }));
+    const { episodeToPlay } = await import("./library");
+    expect((await episodeToPlay(SESSION, ID))?.name).toBe("Ep 1");
+    expect(calls.map((call) => call.path)).toEqual(["/Shows/NextUp", `/Shows/${ID}/Episodes`]);
+    expect(calls[1]!.query.get("isSpecialSeason")).toBe("false");
+  });
+});

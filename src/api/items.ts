@@ -45,6 +45,8 @@ export interface Item {
   favorite: boolean;
   /// How far through, 0 to 1, when partly watched.
   progress?: number;
+  /// Where to resume, in seconds, when partly watched.
+  resumeSeconds?: number;
   /// Series and seasons: episodes not yet watched.
   unplayed?: number;
   seriesId?: string;
@@ -158,6 +160,7 @@ export function toItem(value: unknown): Item | null {
     played: user.Played === true,
     favorite: user.IsFavorite === true,
     progress: progress && progress > 0 && progress < 1 ? progress : undefined,
+    resumeSeconds: progress && progress > 0 && progress < 1 && position ? Math.round(position / 10_000_000) : undefined,
     unplayed: number(user.UnplayedItemCount, 1, 100_000),
     seriesId,
     seriesName: text(dto.SeriesName, MAX_NAME),

@@ -130,3 +130,20 @@ async function mark(session: Session, path: string, on: boolean): Promise<void> 
 
 export const setFavorite = (session: Session, id: string, on: boolean) => mark(session, `/UserFavoriteItems/${id}`, on);
 export const setPlayed = (session: Session, id: string, on: boolean) => mark(session, `/UserPlayedItems/${id}`, on);
+
+/// What "Play" on a show starts: the episode to watch next (one part-watched counts), else the
+/// first regular episode.
+export async function episodeToPlay(session: Session, seriesId: string): Promise<Item | null> {
+  const next = await list(session, "/Shows/NextUp", { seriesId, limit: "1", enableResumable: "true", fields: "" });
+  if (next[0]) return next[0];
+  const first = await list(session, `/Shows/${seriesId}/Episodes`, { isSpecialSeason: "false", limit: "1" });
+  return first[0] ?? null;
+}
+
+/// The episode after this one in its show, if any.
+export async function episodeAfter(session: Session, episode: Item): Promise<Item | null> {
+  if (!episode.seriesId) return null;
+  const around = await list(session, `/Shows/${episode.seriesId}/Episodes`, { adjacentTo: episode.id });
+  const at = around.findIndex((entry) => entry.id === episode.id);
+  return at >= 0 ? (around[at + 1] ?? null) : null;
+}

@@ -1,6 +1,6 @@
 import { useRef, useState } from "preact/hooks";
 import type { Item } from "../../api/items";
-import { children, episodes, item as fetchItem, seasons, setFavorite, setPlayed, similar, withPerson } from "../../api/library";
+import { children, episodeToPlay, episodes, item as fetchItem, seasons, setFavorite, setPlayed, similar, withPerson } from "../../api/library";
 import { session } from "../../api/session";
 import { Button } from "../../design/components/Button";
 import { refreshAll, useResource } from "../../data/resource";
@@ -9,10 +9,9 @@ import { Hero } from "../browse/Hero";
 import { ItemShelf, Shelf } from "../browse/Shelf";
 import { Unreachable } from "../browse/Status";
 import { useEnter } from "../shell/enter";
-import { openItem } from "../shell/route";
+import { openItem, play } from "../shell/route";
 
 type Mark = "played" | "favorite";
-const nothing = () => undefined;
 
 /// One movie, show, episode, collection or person: the header with its actions, then the shelves
 /// that belong to it (episodes by season, cast, more like this, what a collection holds, what a
@@ -56,6 +55,18 @@ export function Detail({ id }: { id: string }) {
     }
   };
 
+  const start = async (resume: boolean) => {
+    const current = session.value;
+    if (!current) return;
+    if (type === "Series") {
+      // A show plays the episode to watch next.
+      const episode = await episodeToPlay(current, id).catch(() => null);
+      if (episode) play(episode.id, !!episode.progress);
+    } else {
+      play(id, resume);
+    }
+  };
+
   const playable = type === "Movie" || type === "Episode";
   const watchable = playable || type === "Series";
   const seriesId = type === "Episode" ? item.seriesId : undefined;
@@ -64,17 +75,22 @@ export function Detail({ id }: { id: string }) {
   return (
     <div ref={screen} class="detail" data-scroll="y">
       <Hero item={item} full>
-        {playable && (
-          <Button icon="play" disabled onPress={nothing}>
+        {(playable || type === "Series") && (
+          <Button icon="play" onPress={() => void start(item.progress ? true : false)} autoFocus>
             {item.progress ? "Resume" : "Play"}
           </Button>
         )}
+        {playable && item.progress && (
+          <Button icon="arrow-counter-clockwise" onPress={() => play(id, false)}>
+            Restart
+          </Button>
+        )}
         {watchable && (
-          <Button icon={state.played ? "check" : "eye"} on={state.played} onPress={() => void toggle("played")} autoFocus>
+          <Button icon={state.played ? "check" : "eye"} on={state.played} onPress={() => void toggle("played")} autoFocus={!playable && type !== "Series"}>
             Watched
           </Button>
         )}
-        <Button icon={state.favorite ? "check" : "heart"} on={state.favorite} onPress={() => void toggle("favorite")} autoFocus={!watchable}>
+        <Button icon={state.favorite ? "check" : "heart"} on={state.favorite} onPress={() => void toggle("favorite")} autoFocus={!watchable && !playable}>
           Favorite
         </Button>
         {seriesId && (
@@ -83,7 +99,6 @@ export function Detail({ id }: { id: string }) {
           </Button>
         )}
       </Hero>
-      {playable && <p class="secondary detail-note">Playback arrives in the next build.</p>}
 
       {type === "Series" && seasonList.data && seasonList.data.length > 1 && (
         <Shelf title="Seasons">

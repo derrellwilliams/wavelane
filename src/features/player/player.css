@@ -1,0 +1,121 @@
+/* Player: black full screen with the video, and an OSD that fades in over a gradient. The
+   hidden OSD is `hidden` (not drawn), so nothing on it can take focus. */
+.player {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  background: #000;
+  color: var(--ink);
+}
+.player-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background: #000;
+}
+.player::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: #000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--smooth) var(--ease-out);
+}
+/* Paused for a minute: the picture dims so a still frame doesn't sit on the OLED. */
+.player.is-dim::after {
+  opacity: 0.8;
+}
+.player-wait {
+  position: absolute;
+  right: var(--screen-inset);
+  bottom: var(--screen-inset);
+}
+.player-top,
+.player-bottom {
+  position: absolute;
+  right: 0;
+  left: 0;
+  z-index: 1;
+  padding: var(--space-xl) var(--screen-inset);
+}
+.player-top {
+  top: 0;
+  background: linear-gradient(to bottom, var(--scrim), transparent);
+}
+.player-bottom {
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  background: linear-gradient(to top, var(--scrim), transparent);
+}
+.player-buttons {
+  flex-wrap: wrap;
+}
+.seek {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: var(--space-xl);
+  padding: 0 var(--space-xs);
+  border-radius: var(--radius-small);
+  box-shadow: inset 0 0 0 var(--focus-ring) transparent;
+}
+.seek:focus {
+  box-shadow: inset 0 0 0 var(--focus-ring) var(--ink);
+}
+.seek-track {
+  width: 100%;
+  height: var(--space-xs);
+  overflow: hidden;
+  background: var(--tint-pressed);
+}
+.seek-fill {
+  width: 100%;
+  height: 100%;
+  background: var(--ink);
+  transform-origin: left;
+}
+.seek-thumb {
+  position: absolute;
+  bottom: calc(100% + var(--space-sm));
+  transform: translateX(-50%);
+}
+.seek-picture {
+  border: var(--focus-ring) solid var(--ink);
+  background-color: var(--placeholder);
+  box-sizing: content-box;
+}
+.player-times {
+  justify-content: space-between;
+  padding: 0 var(--space-xs);
+}
+.player-prompt {
+  position: absolute;
+  right: var(--screen-inset);
+  bottom: calc(var(--control) * 3 + var(--space-xxl));
+  z-index: 2;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  background: var(--surface);
+}
+.prompt-text {
+  display: flex;
+  flex-direction: column;
+  max-width: var(--thumb-w);
+}
+.player-error {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: var(--space-md);
+  padding: 0 var(--screen-inset);
+  background: var(--bg);
+}

@@ -16,11 +16,15 @@ const GROUP = "[data-focus-group]";
 const MANUAL = "[data-focus-manual]";
 
 type BackHandler = () => void;
+/// Sees every key press before the engine does; return true to take it (the handler then calls
+/// preventDefault itself). The player uses this for seeking and media keys.
+type KeyHandler = (event: KeyboardEvent) => boolean;
 type EdgeHandler = (direction: Direction, from: HTMLElement) => boolean;
 
 const scopes: HTMLElement[] = [];
 const backHandlers: BackHandler[] = [];
 const edgeHandlers: EdgeHandler[] = [];
+const keyHandlers: KeyHandler[] = [];
 
 declare global {
   interface Window {
@@ -112,6 +116,14 @@ export function onEdge(handler: EdgeHandler): () => void {
   };
 }
 
+export function onKey(handler: KeyHandler): () => void {
+  keyHandlers.push(handler);
+  return () => {
+    const index = keyHandlers.lastIndexOf(handler);
+    if (index >= 0) keyHandlers.splice(index, 1);
+  };
+}
+
 /// Focuses `element` if the remote can land on it. False when it is gone or hidden.
 export function focusIfUsable(element: Element | null | undefined): boolean {
   if (!(element instanceof HTMLElement) || !element.isConnected || !usable(element)) return false;
@@ -150,6 +162,7 @@ function back() {
 }
 
 function onKeyDown(event: KeyboardEvent) {
+  for (let index = keyHandlers.length - 1; index >= 0; index--) if (keyHandlers[index]!(event)) return;
   const active = document.activeElement;
   const typing = active instanceof HTMLInputElement;
   const direction = directionOf(event);

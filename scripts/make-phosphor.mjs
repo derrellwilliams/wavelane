@@ -5,6 +5,13 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const ICONS = [
+  "arrow-counter-clockwise",
+  "gauge",
+  "info",
+  "pause",
+  "skip-forward",
+  "speaker-high",
+  "x",
   "arrow-left",
   "arrow-right",
   "arrow-clockwise",

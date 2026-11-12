@@ -14,6 +14,12 @@ const MAX_DEPTH = 30;
 
 export const tab = signal<Tab>("home");
 export const pages = signal<Page[]>([]);
+/// The film or episode on screen in the player, if any. `resume` starts where it was left.
+export const playing = signal<{ id: string; resume: boolean } | null>(null);
+
+export function play(id: string, resume: boolean): void {
+  playing.value = { id, resume };
+}
 
 /// Set by `goBack` for the shell to focus once the screen underneath is showing again.
 export let returnTo: Element | null = null;
@@ -26,6 +32,10 @@ export function openItem(target: { id: string }): void {
 
 /// One step back: close the top detail page, else return to Home. False when already there.
 export function goBack(): boolean {
+  if (playing.value) {
+    playing.value = null;
+    return true;
+  }
   const open = pages.value;
   if (open.length) {
     returnTo = open[open.length - 1]!.from;
@@ -42,5 +52,6 @@ export function goBack(): boolean {
 export function resetRoute(): void {
   returnTo = null;
   pages.value = [];
+  playing.value = null;
   tab.value = "home";
 }

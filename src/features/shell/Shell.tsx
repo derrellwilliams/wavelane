@@ -10,8 +10,10 @@ import { Home } from "../home/Home";
 import { Library } from "../library/Library";
 import { Search } from "../search/Search";
 import "../browse/browse.css";
+import "../player/player.css";
+import { Player } from "../player/Player";
 import { ACTIVE } from "./enter";
-import { goBack, pages, returnTo, tab, type Tab } from "./route";
+import { goBack, pages, play, playing, returnTo, tab, type Tab } from "./route";
 
 const TABS: { id: Tab; icon: IconName; label: string }[] = [
   { id: "home", icon: "house", label: "Home" },
@@ -38,6 +40,7 @@ export function Shell({ session, onSetupCheck, onSignOut }: Props) {
   const current = tab.value;
   const open = pages.value;
   const top = open[open.length - 1];
+  const watching = playing.value;
 
   useBack(top || current !== "home" ? back : null);
 
@@ -96,6 +99,9 @@ export function Shell({ session, onSetupCheck, onSignOut }: Props) {
         {current === "search" && <Search />}
         {current === "account" && <Account session={session} onSetupCheck={onSetupCheck} onSignOut={onSignOut} />}
       </div>
+      {watching && (
+        <Player key={watching.id} id={watching.id} resume={watching.resume} onClose={() => (playing.value = null)} onNext={(id) => play(id, false)} />
+      )}
       {top && <Detail key={`${depth}:${top.id}`} id={top.id} />}
     </div>
   );

@@ -7,7 +7,7 @@ import { useResource } from "../../data/resource";
 import { Hero } from "../browse/Hero";
 import { ItemShelf } from "../browse/Shelf";
 import { Status, Unreachable } from "../browse/Status";
-import { openItem } from "../shell/route";
+import { openItem, play } from "../shell/route";
 import { useEnter } from "../shell/enter";
 
 const latestMovies = (session: Session) => latest(session, "Movie");
@@ -47,7 +47,12 @@ export function Home() {
     <div ref={screen} class="screen has-hero" data-scroll="y">
       {spotlight && (
         <Hero item={spotlight} kicker={kicker}>
-          <Button icon="arrow-right" onPress={() => openItem(spotlight)} autoFocus>
+          {(spotlight.type === "Movie" || spotlight.type === "Episode") && (
+            <Button icon="play" onPress={() => play(spotlight.id, !!spotlight.progress)} autoFocus>
+              {spotlight.progress ? "Resume" : "Play"}
+            </Button>
+          )}
+          <Button icon="arrow-right" onPress={() => openItem(spotlight)} autoFocus={spotlight.type !== "Movie" && spotlight.type !== "Episode"}>
             Details
           </Button>
         </Hero>

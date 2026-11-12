@@ -88,6 +88,26 @@
   --overview-lines-short: 2;
   --scrim: rgb(26 26 26 / 0.7); /* behind a drawer */
 
+  /* Subtitles: sizes and positions on the 1080p canvas, and the one place white is allowed
+     (a viewer choice, for people who want it). The edge is drawn in the canvas color. */
+  --sub-size-s: 40px;
+  --sub-size-m: 48px;
+  --sub-size-l: 58px;
+  --sub-size-xl: 72px;
+  --sub-low: 72px;
+  --sub-mid: 160px;
+  --sub-high: 280px;
+  --sub-lift: 300px; /* how far they rise while the player controls are showing */
+  --sub-white: #ffffff;
+  --sub-edge: 3px;
+  --sub-dim: rgb(26 26 26 / 0.6);
+  --sub-solid: #1a1a1a;
+  --sub-soft: 0.85;
+  --sub-dimmer: 0.65;
+  --preview-w: 768px;
+  --preview-h: 432px;
+  --preview-scale: 0.4;
+
   /* Radius: artwork is square. */
   --radius-small: 10px;
   --radius-artwork: 0;

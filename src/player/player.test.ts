@@ -234,3 +234,43 @@ describe("scrub", () => {
     expect(clock(Number.NaN)).toBe("0:00");
   });
 });
+
+describe("subtitle requests and reports", () => {
+  it("asks for the chosen burn-in track, and for subtitle files by an address it builds itself", async () => {
+    const calls: { url: string; init: RequestInit }[] = [];
+    vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
+      calls.push({ url, init });
+      if (url.includes("Stream.vtt")) return new Response("WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nHi\n", { status: 200 });
+      return new Response(JSON.stringify({ PlaySessionId: "ps", MediaSources: [{ Id: "s1", SupportsDirectPlay: true, DefaultSubtitleStreamIndex: 3, MediaStreams: [{ Index: 3, Type: "Subtitle", IsTextSubtitleStream: true }] }] }), { status: 200 });
+    });
+    const { subtitleCues } = await import("./playback");
+    const made = await plan(SESSION, ITEM, { startSeconds: 0, subtitleIndex: -1 });
+    expect(JSON.parse(calls[0]!.init.body as string)).toMatchObject({ SubtitleStreamIndex: -1, AlwaysBurnInSubtitleWhenTranscoding: false });
+    expect(made.source).toMatchObject({ defaultSub: 3, subs: [{ index: 3, text: true }] });
+    const cues = await subtitleCues(SESSION, ITEM, "s1", 3);
+    expect(cues).toHaveLength(1);
+    expect(calls[1]!.url).toBe(`http://nas:8096/Videos/${ITEM}/s1/Subtitles/3/0/Stream.vtt`);
+    expect(calls[1]!.url).not.toContain("tok123");
+  });
+
+  it("falls back to the JSON cue list when WebVTT isn't available", async () => {
+    vi.stubGlobal("fetch", async (url: string) =>
+      url.endsWith(".vtt") ? new Response(null, { status: 400 }) : new Response(JSON.stringify({ TrackEvents: [{ StartPositionTicks: 0, EndPositionTicks: 10_000_000, Text: "Yo" }] }), { status: 200 }),
+    );
+    const { subtitleCues } = await import("./playback");
+    expect(await subtitleCues(SESSION, ITEM, "s1", 3)).toHaveLength(1);
+  });
+
+  it("reports the subtitle in use, and -1 for none", async () => {
+    const bodies: Record<string, unknown>[] = [];
+    vi.stubGlobal("fetch", async (_url: string, init: RequestInit) => {
+      bodies.push(JSON.parse(init.body as string));
+      return new Response(null, { status: 204 });
+    });
+    const { reportProgress } = await import("./playback");
+    const base = { itemId: ITEM, sourceId: "s1", playSessionId: "ps", method: "DirectPlay" as const, seconds: 5, paused: false };
+    await reportProgress(SESSION, { ...base, subtitleIndex: 4 });
+    await reportProgress(SESSION, { ...base, subtitleIndex: null });
+    expect(bodies.map((body) => body.SubtitleStreamIndex)).toEqual([4, -1]);
+  });
+});

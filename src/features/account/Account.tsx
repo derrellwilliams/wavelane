@@ -1,8 +1,9 @@
-import { useRef } from "preact/hooks";
+import { useRef, useState } from "preact/hooks";
 import { versionAtLeast, type Session } from "../../api/auth";
 import { Button } from "../../design/components/Button";
 import { Icon } from "../../design/components/Icon";
 import { Mark } from "../../design/components/Mark";
+import { SubtitleStyle } from "../player/SubtitleStyle";
 import { useEnter } from "../shell/enter";
 
 interface Props {
@@ -15,13 +16,16 @@ interface Props {
 /// flags a server too old for features planned later.
 export function Account({ session, onSetupCheck, onSignOut }: Props) {
   const screen = useRef<HTMLElement>(null);
-  useEnter(screen, true);
+  const [styling, setStyling] = useState(false);
+  useEnter(screen, !styling);
 
   const missing = !versionAtLeast(session.serverVersion, 10, 9)
     ? "Scrub thumbnails need Jellyfin 10.9 and Skip Intro needs 10.10."
     : !versionAtLeast(session.serverVersion, 10, 10)
       ? "Skip Intro needs Jellyfin 10.10."
       : "";
+
+  if (styling) return <SubtitleStyle onClose={() => setStyling(false)} />;
 
   return (
     <main ref={screen} class="page">
@@ -48,6 +52,9 @@ export function Account({ session, onSetupCheck, onSignOut }: Props) {
       <div class="row actions" data-focus-group>
         <Button icon="wrench" onPress={onSetupCheck} autoFocus>
           Setup check
+        </Button>
+        <Button icon="subtitles" onPress={() => setStyling(true)}>
+          Subtitle appearance
         </Button>
         <Button icon="sign-out" onPress={onSignOut}>
           Sign out

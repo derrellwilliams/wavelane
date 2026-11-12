@@ -10,9 +10,15 @@ import { Icon } from "../../design/components/Icon";
 import { Menu } from "../../design/components/Menu";
 import { focusIfUsable, onKey, pushScope } from "../../nav/focus";
 import { useBack } from "../../nav/hooks";
-import { plan, PlaybackError, reportProgress, reportStart, reportStop, segments as fetchSegments, trickplay as fetchTrickplay, trickplayUrl, type Plan, type Report } from "../../player/playback";
+import { plan, PlaybackError, reportProgress, subtitleCues, reportStart, reportStop, segments as fetchSegments, trickplay as fetchTrickplay, trickplayUrl, type Plan, type Report } from "../../player/playback";
 import { activeSegment, skipLabel, type Segment } from "../../player/segments";
 import { clock, scrubTarget } from "../../player/scrub";
+import { isBurned } from "../../subtitles/tracks";
+import { type Cue } from "../../subtitles/cues";
+import { readOffset, saveOffset, subtitleStyle } from "../../subtitles/style";
+import { SubtitlePanel } from "./SubtitlePanel";
+import { SubtitleStyle } from "./SubtitleStyle";
+import { SubtitleView, useActiveLines } from "./SubtitleView";
 import type { TrickInfo } from "../../player/trickplay";
 import { thumbAt } from "../../player/trickplay";
 
@@ -35,7 +41,7 @@ const LEAVE_WAIT_MS = 1500;
 
 const KEY = { left: 37, up: 38, right: 39, down: 40, ok: 13, play: 415, pause: 19, toggle: 10252, stop: 413, rewind: 412, forward: 417 };
 
-type Menus = "audio" | "speed" | null;
+type Menus = "audio" | "speed" | "subs" | "style" | null;
 
 /// Full-screen playback. The OSD (title, controls, seek bar) shows on Up, Down, a pointer move or
 /// a pause and hides itself; while it is hidden Left and Right seek and OK pauses. Progress goes
@@ -69,9 +75,13 @@ export function Player({ id, resume, onClose, onNext }: Props) {
   const [stats, setStats] = useState(false);
   const [dim, setDim] = useState(false);
   const [leaving, setLeaving] = useState(false);
+  const [sub, setSub] = useState<number | null>(null);
+  const [cues, setCues] = useState<Cue[]>([]);
+  const [offset, setOffset] = useState(() => readOffset(id));
+  const [note, setNote] = useState("");
 
   // Latest values for handlers that outlive a render.
-  const live = useRef({ time: 0, duration: 0, paused: false, osd: false, scrub: null as number | null, plan: null as Plan | null, leaving: false, next: null as Item | null, prompt: null as (() => void) | null, retried: false });
+  const live = useRef({ time: 0, duration: 0, paused: false, osd: false, scrub: null as number | null, plan: null as Plan | null, leaving: false, next: null as Item | null, prompt: null as (() => void) | null, retried: false, sub: null as number | null });
   live.current.time = time;
   live.current.duration = duration;
   live.current.paused = paused;
@@ -79,13 +89,14 @@ export function Player({ id, resume, onClose, onNext }: Props) {
   live.current.scrub = scrub;
   live.current.plan = active;
   live.current.leaving = leaving;
+  live.current.sub = sub;
   live.current.next = skippedNext ? null : next;
 
   const autoplay = load("autoplayNext") !== "off";
 
   const report = useCallback((): Report | null => {
     const now = live.current;
-    return now.plan && { itemId: id, sourceId: now.plan.source.id, playSessionId: now.plan.playSessionId, method: now.plan.method, seconds: now.time, paused: now.paused, audioIndex: now.plan.audioIndex };
+    return now.plan && { itemId: id, sourceId: now.plan.source.id, playSessionId: now.plan.playSessionId, method: now.plan.method, seconds: now.time, paused: now.paused, audioIndex: now.plan.audioIndex, subtitleIndex: now.sub };
   }, [id]);
 
   const progress = useCallback(() => {
@@ -126,7 +137,7 @@ export function Player({ id, resume, onClose, onNext }: Props) {
 
   // Load what to play.
   const begin = useCallback(
-    async (user: Session, seconds: number, options: { audioIndex?: number; transcode?: boolean } = {}) => {
+    async (user: Session, seconds: number, options: { audioIndex?: number; subtitleIndex?: number; transcode?: boolean } = {}) => {
       try {
         const made = await plan(user, id, { startSeconds: seconds, ...options });
         setStart(seconds);
@@ -157,7 +168,11 @@ export function Player({ id, resume, onClose, onNext }: Props) {
       setItem(found);
       const made = await begin(user, resume ? (found.resumeSeconds ?? 0) : 0);
       if (!made || gone) return;
-      void reportStart(user, { itemId: id, sourceId: made.source.id, playSessionId: made.playSessionId, method: made.method, seconds: resume ? (found.resumeSeconds ?? 0) : 0, paused: false, audioIndex: made.audioIndex });
+      // The track the server picked from the user's subtitle settings (it honours the mode,
+      // language and per-show choice).
+      live.current.sub = made.source.defaultSub ?? null;
+      setSub(live.current.sub);
+      void reportStart(user, { itemId: id, sourceId: made.source.id, playSessionId: made.playSessionId, method: made.method, seconds: resume ? (found.resumeSeconds ?? 0) : 0, paused: false, audioIndex: made.audioIndex, subtitleIndex: made.source.defaultSub ?? null });
       void fetchSegments(user, id).then((list) => !gone && setSegs(list));
       void fetchTrickplay(user, id, made.source.id).then((info) => !gone && setTrick(info));
       if (found.type === "Episode") void episodeAfter(user, found).then((after) => !gone && setNext(after)).catch(() => undefined);
@@ -340,7 +355,77 @@ export function Player({ id, resume, onClose, onNext }: Props) {
       progress();
       return;
     }
-    await begin(user, live.current.time, { audioIndex: index, transcode: now.method === "Transcode" });
+    await begin(user, live.current.time, { audioIndex: index, subtitleIndex: live.current.sub ?? -1, transcode: now.method === "Transcode" });
+  };
+
+  // Text subtitles: fetch the cues for the chosen track; picture tracks are burned in by the
+  // server, and Off draws nothing.
+  const sourceId = active?.source.id;
+  useEffect(() => {
+    const user = current.value;
+    const track = live.current.plan?.source.subs.find((entry) => entry.index === sub);
+    setCues([]);
+    if (!user || !sourceId || !track?.text) return;
+    let gone = false;
+    subtitleCues(user, id, sourceId, track.index)
+      .then((list) => {
+        if (gone) return;
+        setCues(list);
+        if (!list.length) flash("This subtitle track is empty.");
+      })
+      .catch(() => !gone && flash("Couldn't load the subtitles."));
+    return () => {
+      gone = true;
+    };
+  }, [sub, sourceId]);
+
+  const noteTimer = useRef(0);
+  const flash = (text: string) => {
+    setNote(text);
+    clearTimeout(noteTimer.current);
+    noteTimer.current = window.setTimeout(() => setNote(""), 4000);
+  };
+  useEffect(() => () => clearTimeout(noteTimer.current), []);
+
+  /// Picks a subtitle track (null for Off). Drawing a text track needs nothing from the server,
+  /// so the film carries on; only burning one in (or taking one out) asks for the stream again.
+  const chooseSub = async (index: number | null) => {
+    const now = live.current.plan;
+    const user = current.value;
+    if (!now || !user) return;
+    const before = now.source.subs.find((track) => track.index === live.current.sub);
+    const after = now.source.subs.find((track) => track.index === index);
+    live.current.sub = index;
+    setSub(index);
+    if (isBurned(before) || isBurned(after)) {
+      await begin(user, live.current.time, { audioIndex: now.audioIndex, subtitleIndex: index ?? -1, transcode: now.method === "Transcode" });
+    } else {
+      progress();
+    }
+  };
+
+  /// A subtitle was downloaded: ask the server for the film's tracks again and switch to the new one.
+  const refreshSubs = async () => {
+    const user = current.value;
+    const now = live.current.plan;
+    if (!user || !now) return;
+    const known = new Set(now.source.subs.map((track) => track.index));
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const fresh = await plan(user, id, { startSeconds: live.current.time, audioIndex: now.audioIndex });
+        const added = fresh.source.subs.filter((track) => !known.has(track.index));
+        if (added[0]) {
+          live.current.plan = { ...now, source: { ...now.source, subs: fresh.source.subs } };
+          setActive(live.current.plan);
+          await chooseSub(added[0].index);
+          return;
+        }
+      } catch {
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+    }
+    flash("Downloaded. It can take a moment to show up in the list.");
   };
 
   const onVideoError = async () => {
@@ -349,7 +434,7 @@ export function Player({ id, resume, onClose, onNext }: Props) {
     if (!user || !now || live.current.leaving) return;
     if (now.method === "DirectPlay" && !live.current.retried) {
       live.current.retried = true;
-      await begin(user, live.current.time, { audioIndex: now.audioIndex, transcode: true });
+      await begin(user, live.current.time, { audioIndex: now.audioIndex, subtitleIndex: live.current.sub ?? -1, transcode: true });
     } else {
       setError("The TV couldn't play this. Try another version, or check the server's transcoding.");
     }
@@ -359,6 +444,7 @@ export function Player({ id, resume, onClose, onNext }: Props) {
     setMenu(null);
     wake();
   };
+  const lines = useActiveLines(video, sub !== null && live.current.plan?.source.subs.find((track) => track.index === sub)?.text ? cues : [], offset);
   const element = video.current;
   const shown = scrub ?? time;
   const total = duration || active?.source.seconds || 0;
@@ -402,7 +488,8 @@ export function Player({ id, resume, onClose, onNext }: Props) {
           }}
         />
       )}
-      {waiting && !error && <div class="player-wait mono secondary">Loading</div>}
+      <SubtitleView lines={lines} style={subtitleStyle.value} lifted={osd || paused} />
+      {(waiting || note) && !error && <div class="player-wait mono secondary">{note || "Loading"}</div>}
 
       <div class="player-top" hidden={!(osd || paused) || !!error}>
         <h1 class="section">{title}</h1>
@@ -427,6 +514,9 @@ export function Player({ id, resume, onClose, onNext }: Props) {
               Audio
             </Button>
           )}
+          <Button icon="subtitles" on={sub !== null} onPress={() => setMenu("subs")}>
+            Subtitles
+          </Button>
           <Button icon="gauge" onPress={() => setMenu("speed")}>
             {speed === 1 ? "Speed" : `${speed}×`}
           </Button>
@@ -505,6 +595,24 @@ export function Player({ id, resume, onClose, onNext }: Props) {
           onClose={closeMenu}
         />
       )}
+      {menu === "subs" && active && current.value && (
+        <SubtitlePanel
+          session={current.value}
+          itemId={id}
+          tracks={active.source.subs}
+          selected={sub}
+          offset={offset}
+          onSelect={(index) => void chooseSub(index)}
+          onOffset={(seconds) => {
+            setOffset(seconds);
+            saveOffset(id, seconds);
+          }}
+          onAppearance={() => setMenu("style")}
+          onDownloaded={refreshSubs}
+          onClose={closeMenu}
+        />
+      )}
+      {menu === "style" && <SubtitleStyle onClose={() => setMenu("subs")} />}
       {menu === "speed" && (
         <Menu
           title="Speed"

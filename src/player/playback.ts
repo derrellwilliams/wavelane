@@ -10,6 +10,8 @@ import { request } from "../api/client";
 import { deviceId } from "../api/storage";
 import { deviceProfile } from "./profile";
 import { pickTrickplay, type TrickInfo } from "./trickplay";
+import { parseJsonCues, parseVtt, type Cue } from "../subtitles/cues";
+import { toSubTracks, type SubTrack } from "../subtitles/tracks";
 import { toSegments, type Segment } from "./segments";
 
 const TICKS = 10_000_000;
@@ -31,6 +33,9 @@ export interface Source {
   seconds?: number;
   audio: AudioTrack[];
   defaultAudio?: number;
+  subs: SubTrack[];
+  /// The track the server chose from the user's subtitle settings (none when absent).
+  defaultSub?: number;
   /// For the stats overlay.
   container?: string;
   video?: string;
@@ -84,6 +89,8 @@ export function toSource(raw: unknown): Source | null {
     seconds: count(value.RunTimeTicks, 1, 1e15) ? (value.RunTimeTicks as number) / TICKS : undefined,
     audio,
     defaultAudio: count(value.DefaultAudioStreamIndex, 0, 1000),
+    subs: toSubTracks(streams),
+    defaultSub: count(value.DefaultSubtitleStreamIndex, 0, 1000),
     container: short(value.Container, 40),
     video,
     audioCodec,
@@ -128,6 +135,8 @@ export function choosePlan(session: Session, itemId: string, reply: PlaybackInfo
 export interface PlanOptions {
   startSeconds: number;
   audioIndex?: number;
+  /// A subtitle track to have burned in, or -1 for none; leave out to let the server choose.
+  subtitleIndex?: number;
   /// Skip direct play (it failed on the TV).
   transcode?: boolean;
   maxBitrate?: number;
@@ -145,6 +154,8 @@ export async function plan(session: Session, itemId: string, options: PlanOption
       StartTimeTicks: toTicks(options.startSeconds),
       MaxStreamingBitrate: profile.MaxStreamingBitrate,
       AudioStreamIndex: options.audioIndex,
+      SubtitleStreamIndex: options.subtitleIndex,
+      AlwaysBurnInSubtitleWhenTranscoding: false,
       DeviceProfile: profile,
       EnableDirectPlay: !options.transcode,
       EnableDirectStream: true,
@@ -153,6 +164,18 @@ export async function plan(session: Session, itemId: string, options: PlanOption
     },
   });
   return choosePlan(session, itemId, reply, options.audioIndex);
+}
+
+/// A subtitle file for the app to draw: WebVTT from the server, else its JSON cue list. The
+/// address is built here rather than taken from the server's reply.
+export async function subtitleCues(session: Session, itemId: string, sourceId: string, index: number): Promise<Cue[]> {
+  const base = `/Videos/${itemId}/${encodeURIComponent(sourceId)}/Subtitles/${index}/0/Stream`;
+  const connection = connectionOf(session);
+  try {
+    return parseVtt(await request<string>(connection, `${base}.vtt`, { as: "text", timeoutMs: 30000 }));
+  } catch {
+    return parseJsonCues(await request<unknown>(connection, `${base}.js`, { timeoutMs: 30000 }));
+  }
 }
 
 /// Intro / credits spans. A server without them (or without the feature) just gives none.
@@ -190,6 +213,8 @@ export interface Report {
   seconds: number;
   paused: boolean;
   audioIndex?: number;
+  /// The subtitle track in use, so the server can remember the choice.
+  subtitleIndex?: number | null;
 }
 
 function body(report: Report) {
@@ -201,6 +226,7 @@ function body(report: Report) {
     IsPaused: report.paused,
     PlayMethod: report.method,
     AudioStreamIndex: report.audioIndex,
+    SubtitleStreamIndex: report.subtitleIndex ?? -1,
     CanSeek: true,
   };
 }

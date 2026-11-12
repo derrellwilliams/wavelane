@@ -33,7 +33,11 @@ interface Options {
   query?: Record<string, string>;
   body?: unknown;
   timeoutMs?: number;
+  /// Return the reply as text instead of parsing it as JSON (subtitle files).
+  as?: "text";
 }
+
+const MAX_TEXT_REPLY = 5_000_000;
 
 export async function request<T>(connection: Connection, path: string, options: Options = {}): Promise<T> {
   const method = options.method ?? "GET";
@@ -68,6 +72,10 @@ export async function request<T>(connection: Connection, path: string, options: 
     const text = await response.text().catch(() => {
       throw new ApiError(0, what);
     });
+    if (options.as === "text") {
+      if (text.length > MAX_TEXT_REPLY) throw new ApiError(0, what);
+      return text as T;
+    }
     if (!text) return undefined as T;
     try {
       return JSON.parse(text) as T;

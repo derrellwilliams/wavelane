@@ -119,3 +119,145 @@
   padding: 0 var(--screen-inset);
   background: var(--bg);
 }
+
+/* Subtitles: a layer over the video, above the controls' gradient. Drawn as text; the look is
+   keyed on data attributes the SubtitleView sets from the saved choices. */
+.sub {
+  position: absolute;
+  right: var(--screen-inset);
+  bottom: var(--sub-low);
+  left: var(--screen-inset);
+  z-index: 1;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+  transition: transform var(--snappy) var(--ease-out);
+}
+.sub.is-lifted {
+  transform: translateY(calc(var(--sub-lift) * -1));
+}
+.sub[data-position="mid"] {
+  bottom: var(--sub-mid);
+}
+.sub[data-position="high"] {
+  bottom: var(--sub-high);
+}
+.sub-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: var(--measure);
+  padding: var(--space-xxs) var(--space-md);
+  color: var(--ink);
+  font-size: var(--sub-size-l);
+  line-height: var(--leading-title);
+  text-align: center;
+}
+.sub-line {
+  margin: 0;
+}
+.sub[data-size="s"] .sub-box {
+  font-size: var(--sub-size-s);
+}
+.sub[data-size="m"] .sub-box {
+  font-size: var(--sub-size-m);
+}
+.sub[data-size="xl"] .sub-box {
+  font-size: var(--sub-size-xl);
+}
+.sub[data-color="white"] .sub-box {
+  color: var(--sub-white);
+}
+.sub[data-background="dim"] .sub-box {
+  background: var(--sub-dim);
+}
+.sub[data-background="solid"] .sub-box {
+  background: var(--sub-solid);
+}
+.sub[data-edge="shadow"] .sub-box {
+  text-shadow: 0 var(--space-xxs) var(--space-xs) var(--sub-solid);
+}
+.sub[data-edge="outline"] .sub-box {
+  text-shadow:
+    calc(var(--sub-edge) * -1) calc(var(--sub-edge) * -1) 0 var(--sub-solid),
+    var(--sub-edge) calc(var(--sub-edge) * -1) 0 var(--sub-solid),
+    calc(var(--sub-edge) * -1) var(--sub-edge) 0 var(--sub-solid),
+    var(--sub-edge) var(--sub-edge) 0 var(--sub-solid);
+}
+.sub[data-brightness="soft"] {
+  opacity: var(--sub-soft);
+}
+.sub[data-brightness="dim"] {
+  opacity: var(--sub-dimmer);
+}
+.sub .is-i {
+  font-style: italic;
+}
+.sub .is-b {
+  font-weight: 700;
+}
+.sub .is-u {
+  text-decoration: underline;
+}
+
+/* Appearance editor: a preview of the film frame at reduced scale, with the choices beside it. */
+.sub-editor {
+  position: fixed;
+  inset: 0;
+  z-index: 25;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-md);
+  padding: var(--space-xxl) var(--screen-inset);
+  background: var(--bg);
+}
+.sub-stage {
+  width: var(--preview-w);
+  height: var(--preview-h);
+  overflow: hidden;
+  background: var(--placeholder);
+}
+.sub-stage-inner {
+  position: relative;
+  width: 1920px;
+  height: 1080px;
+  transform: scale(var(--preview-scale));
+  transform-origin: top left;
+}
+.sub-options {
+  display: grid;
+  grid-template-columns: repeat(3, auto);
+  gap: var(--space-sm);
+}
+.sub-options .button {
+  justify-content: space-between;
+  gap: var(--space-lg);
+}
+
+.drawer-note {
+  padding: var(--space-sm) var(--space-lg);
+}
+.drawer-result {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+  height: auto;
+  min-height: var(--control);
+  padding-top: var(--space-xs);
+  padding-bottom: var(--space-xs);
+}
+.drawer-detail {
+  font-size: var(--size-caption);
+  white-space: normal;
+}
+.drawer-sync {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: var(--space-xs) 0;
+}
+.drawer-list > * {
+  flex: none;
+}

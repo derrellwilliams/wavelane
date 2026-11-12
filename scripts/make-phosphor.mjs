@@ -5,6 +5,9 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const ICONS = [
+  "subtitles",
+  "minus",
+  "plus",
   "arrow-counter-clockwise",
   "gauge",
   "info",

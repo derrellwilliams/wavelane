@@ -58,7 +58,7 @@ export function Shell({ session, onSetupCheck, onSignOut }: Props) {
 
   useEffect(() => {
     applySeed();
-    void refreshFeed();
+    void refreshFeed(true);
     const timer = setInterval(() => void refreshFeed(), 60 * 60 * 1000);
     return () => clearInterval(timer);
   }, []);

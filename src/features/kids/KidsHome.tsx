@@ -6,7 +6,7 @@ import { Button } from "../../design/components/Button";
 import { useResource } from "../../data/resource";
 import { withoutDismissed } from "../browse/dismissed";
 import { Hero } from "../browse/Hero";
-import { useRemoveFromContinue } from "../browse/RemoveFromContinue";
+import { useItemMenu } from "../browse/ItemMenu";
 import { ItemShelf } from "../browse/Shelf";
 import { Library } from "../library/Library";
 import { openItem, play } from "../shell/route";
@@ -25,7 +25,7 @@ export function KidsHome() {
   const watching = useResource("resume:wide", resumeWide);
   const next = useResource("nextup:wide", nextWide);
 
-  const remove = useRemoveFromContinue();
+  const menu = useItemMenu();
   const continuing = withoutDismissed(kids.only(watching.data));
   const upNext = kids.only(next.data);
   const added = useMemo(
@@ -56,7 +56,7 @@ export function KidsHome() {
             <Button
               icon="play"
               onPress={() => play(spotlight.id, !!spotlight.progress)}
-              onHold={spotlight === resuming ? () => remove.ask(spotlight) : undefined}
+              onHold={() => menu.ask(spotlight, spotlight === resuming)}
               autoFocus
             >
               {spotlight.progress ? "Resume" : "Play"}
@@ -67,11 +67,11 @@ export function KidsHome() {
           </Button>
         </Hero>
       )}
-      <ItemShelf title="Continue Watching" items={continuing} shape="thumb" onOpen={openItem} onHold={remove.ask} />
-      <ItemShelf title="Next Up" items={upNext} shape="thumb" onOpen={openItem} />
-      <ItemShelf title="Recently Added" items={added} shape="poster" onOpen={openItem} />
+      <ItemShelf title="Continue Watching" items={continuing} shape="thumb" onOpen={openItem} onHold={(item) => menu.ask(item, true)} />
+      <ItemShelf title="Next Up" items={upNext} shape="thumb" onOpen={openItem} onHold={menu.ask} />
+      <ItemShelf title="Recently Added" items={added} shape="poster" onOpen={openItem} onHold={menu.ask} />
     </>
   );
 
-  return <Library type="Kids" intro={intro} hero={!!spotlight} after={remove.menu} />;
+  return <Library type="Kids" intro={intro} hero={!!spotlight} after={menu.menu} />;
 }

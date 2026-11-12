@@ -12,6 +12,7 @@ import { useEnter } from "../shell/enter";
 import { openItem } from "../shell/route";
 import { averages } from "../../letterboxd/average";
 import { useMarks } from "../../letterboxd/marks";
+import { useItemMenu } from "../browse/ItemMenu";
 import { isKidsShow, overrides } from "../kids/kids";
 import { arrange, decadesOf, DEFAULT_VIEW, isFiltered, readView, SEEINGS, SORTS, watched, type Seeing, type SortKey, type View } from "./arrange";
 
@@ -31,6 +32,7 @@ export function Library({ type, intro, hero, after }: { type: Kind; intro?: Comp
   const screen = useRef<HTMLDivElement>(null);
   const library = useResource(`all:${type === "Movie" ? "Movie" : "Series"}`, loaders[type]);
   const choices = overrides.value;
+  const itemMenu = useItemMenu();
   const [view, setView] = useState<View>(() => readView(load(`view.${type}`)));
   const [picking, setPicking] = useState<Picking>(null);
 
@@ -113,7 +115,7 @@ export function Library({ type, intro, hero, after }: { type: Kind; intro?: Comp
           </div>
         </header>
 
-        {all && shown.length > 0 && <Grid items={shown} onOpen={openItem} autoFocus={!hero} />}
+        {all && shown.length > 0 && <Grid items={shown} onOpen={openItem} onHold={itemMenu.ask} autoFocus={!hero} />}
         {all && shown.length === 0 && (
           <Status title={isFiltered(view) ? `No ${noun} match these filters` : `No ${noun} in the library yet`}>
             {isFiltered(view) && (
@@ -127,6 +129,7 @@ export function Library({ type, intro, hero, after }: { type: Kind; intro?: Comp
       </div>
       {/* Outside the scrolling screen, so moving through the drawer never scrolls what is under it. */}
       {menu && <Menu title={menu.title} options={menu.options} value={menu.value} onPick={menu.pick} onClose={() => setPicking(null)} />}
+      {itemMenu.menu}
       {after}
     </>
   );

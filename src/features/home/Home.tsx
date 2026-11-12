@@ -8,7 +8,7 @@ import { averages } from "../../letterboxd/average";
 import { useMarks } from "../../letterboxd/marks";
 import { withoutDismissed } from "../browse/dismissed";
 import { Hero } from "../browse/Hero";
-import { useRemoveFromContinue } from "../browse/RemoveFromContinue";
+import { useItemMenu } from "../browse/ItemMenu";
 import { ItemShelf } from "../browse/Shelf";
 import { Status, Unreachable } from "../browse/Status";
 import { isKidsShow, looksKids, useKids } from "../kids/kids";
@@ -36,14 +36,11 @@ export function Home() {
   const marks = useMarks(library.data);
   const known = averages.value;
 
-  const remove = useRemoveFromContinue();
+  const menu = useItemMenu();
   const continuing = withoutDismissed(kids.without(watching.data));
   const upNext = kids.without(next.data);
   const favorite = kids.without(loved.data);
-  const unseen = useMemo(
-    () => unwatchedMovies(library.data, marks, known),
-    [library.data, marks, known],
-  );
+  const unseen = useMemo(() => unwatchedMovies(library.data, marks, known), [library.data, marks, known]);
   const added = useMemo(
     () =>
       recentlyAdded(
@@ -55,14 +52,9 @@ export function Home() {
 
   // Something to continue wins; a kids' movie in progress doesn't count. While the kids' list is
   // still loading, the spotlight waits rather than flashing the wrong thing.
-  const resuming = continuing?.find(
-    (item) => !(item.type === "Movie" && looksKids(item)),
-  );
+  const resuming = continuing?.find((item) => !(item.type === "Movie" && looksKids(item)));
   const pending = !!watching.data?.length && continuing === undefined;
-  const top = useMemo(
-    () => topUnwatched(library.data, marks, known),
-    [library.data, marks, known],
-  );
+  const top = useMemo(() => topUnwatched(library.data, marks, known), [library.data, marks, known]);
   const carousel = resuming || pending ? [] : top;
   const [turn, setTurn] = useState(0);
   const at = carousel.length ? turn % carousel.length : 0;
@@ -71,26 +63,16 @@ export function Home() {
     const timer = setTimeout(() => setTurn(at + 1), SPOTLIGHT_MS);
     return () => clearTimeout(timer);
   }, [carousel.length, at]);
-  const step = (by: number) =>
-    setTurn((at + by + carousel.length) % carousel.length);
+  const step = (by: number) => setTurn((at + by + carousel.length) % carousel.length);
 
   const all = [watching, next, loved, library];
   const ready = all.some((shelf) => shelf.data !== undefined);
-  const settled = all.every(
-    (shelf) => shelf.data !== undefined || shelf.failed,
-  );
-  const empty = [continuing, upNext, favorite, unseen, added].every(
-    (list) => !list?.length,
-  );
+  const settled = all.every((shelf) => shelf.data !== undefined || shelf.failed);
+  const empty = [continuing, upNext, favorite, unseen, added].every((list) => !list?.length);
   useEnter(screen, ready && !empty);
   useEnter(screen, settled && empty);
 
-  const spotlight = pending
-    ? undefined
-    : (resuming ??
-      carousel[at] ??
-      added.find((item) => item.backdrop) ??
-      added[0]);
+  const spotlight = pending ? undefined : (resuming ?? carousel[at] ?? added.find((item) => item.backdrop) ?? added[0]);
   const kicker = !spotlight
     ? undefined
     : spotlight === resuming
@@ -105,22 +87,12 @@ export function Home() {
     <>
       <div ref={screen} class="screen has-hero" data-scroll="y">
         {spotlight && (
-          <Hero
-            item={spotlight}
-            kicker={kicker}
-            average={
-              spotlight.tmdb ? known.get(spotlight.tmdb)?.rating : undefined
-            }
-          >
+          <Hero item={spotlight} kicker={kicker} average={spotlight.tmdb ? known.get(spotlight.tmdb)?.rating : undefined}>
             {(spotlight.type === "Movie" || spotlight.type === "Episode") && (
               <Button
                 icon="play"
                 onPress={() => play(spotlight.id, !!spotlight.progress)}
-                onHold={
-                  spotlight === resuming
-                    ? () => remove.ask(spotlight)
-                    : undefined
-                }
+                onHold={() => menu.ask(spotlight, spotlight === resuming)}
                 autoFocus
               >
                 {spotlight.progress ? "Resume" : "Play"}
@@ -129,9 +101,7 @@ export function Home() {
             <Button
               icon="arrow-right"
               onPress={() => openItem(spotlight)}
-              autoFocus={
-                spotlight.type !== "Movie" && spotlight.type !== "Episode"
-              }
+              autoFocus={spotlight.type !== "Movie" && spotlight.type !== "Episode"}
             >
               Details
             </Button>
@@ -147,40 +117,14 @@ export function Home() {
             )}
           </Hero>
         )}
-        <ItemShelf
-          title="Not Watched Movies"
-          items={unseen}
-          shape="poster"
-          onOpen={openItem}
-        />
-        <ItemShelf
-          title="Up Next"
-          items={upNext}
-          shape="thumb"
-          onOpen={openItem}
-        />
-        <ItemShelf
-          title="Recently Added"
-          items={added}
-          shape="poster"
-          onOpen={openItem}
-        />
-        <ItemShelf
-          title="Favorites"
-          items={favorite}
-          shape="poster"
-          onOpen={openItem}
-        />
-        {settled &&
-          empty &&
-          (all.every((shelf) => shelf.failed) ? (
-            <Unreachable />
-          ) : (
-            <Status title="Nothing in the library yet" />
-          ))}
+        <ItemShelf title="Not Watched Movies" items={unseen} shape="poster" onOpen={openItem} onHold={menu.ask} />
+        <ItemShelf title="Up Next" items={upNext} shape="thumb" onOpen={openItem} onHold={menu.ask} />
+        <ItemShelf title="Recently Added" items={added} shape="poster" onOpen={openItem} onHold={menu.ask} />
+        <ItemShelf title="Favorites" items={favorite} shape="poster" onOpen={openItem} onHold={menu.ask} />
+        {settled && empty && (all.every((shelf) => shelf.failed) ? <Unreachable /> : <Status title="Nothing in the library yet" />)}
       </div>
       {/* Outside the scrolling screen, so moving through the drawer never scrolls what is under it. */}
-      {remove.menu}
+      {menu.menu}
     </>
   );
 }

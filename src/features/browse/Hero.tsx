@@ -10,15 +10,17 @@ interface Props {
   kicker?: string;
   /// One more line under the facts (what Letterboxd says about it).
   notes?: (string | null)[];
+  /// Letterboxd's average, shown beside the rating.
+  average?: number | null;
   children?: ComponentChildren;
 }
 
 /// Backdrop, logo (or the title in type), facts, description and a row of buttons: Home's
 /// spotlight and the head of every detail page.
-export function Hero({ item, full, kicker, notes, children }: Props) {
+export function Hero({ item, full, kicker, notes, average, children }: Props) {
   const backdrop = artSrc(item.backdrop, 1920, 1080, false);
   const logo = artSrc(item.logo, token("--logo-w"), token("--logo-h"), false);
-  const line = facts(item);
+  const line = facts(item, average);
   // An episode is headed by its show (whose logo this is), with its own name on the next line.
   const heading = item.type === "Episode" ? (item.seriesName ?? item.name) : item.name;
 

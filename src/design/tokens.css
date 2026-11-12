@@ -65,18 +65,21 @@
   --mark-height: 32px;
   --press-scale: 0.97;
 
-  /* Browse: the rail, artwork sizes and the shelves and grid built from them. Seven posters or
+  /* Browse: the rail, artwork sizes and the shelves and grid built from them. Six posters (grid) or
      four wide cards fill the width beside the rail. */
   --rail: 128px;
-  --poster-w: 222px;
-  --poster-h: 333px;
-  --thumb-w: 408px;
-  --thumb-h: 230px;
+  --poster-w: 249px; /* six across plus five gaps fill the screen beside the rail */
+  --poster-h: 374px;
+  --thumb-w: 395px; /* four across */
+  --thumb-h: 222px;
   --person-w: 180px;
   --person-h: 270px;
-  --card-gap: 28px;
+  --card-gap: 44px; /* between cards, across and down */
+  --shelf-gap: 32px; /* shelf title to its row of cards */
   --card-caption: 64px; /* title and one mono line under the artwork */
-  --grid-columns: 7;
+  --grid-columns: 6;
+  --card-art-gap: 14px; /* artwork to title */
+  --card-text-gap: 4px; /* title to year */
   --hero: 600px; /* least height of the spotlight and the detail header */
   --hero-text: 900px;
   --logo-w: 560px;

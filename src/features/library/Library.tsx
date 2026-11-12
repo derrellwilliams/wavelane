@@ -11,10 +11,10 @@ import { useEnter } from "../shell/enter";
 import { openItem } from "../shell/route";
 import { averages } from "../../letterboxd/average";
 import { useMarks } from "../../letterboxd/marks";
-import { arrange, decadesOf, DEFAULT_VIEW, genresOf, isFiltered, readView, SEEINGS, SORTS, type Seeing, type SortKey, type View } from "./arrange";
+import { arrange, decadesOf, DEFAULT_VIEW, isFiltered, readView, SEEINGS, SORTS, watched, type Seeing, type SortKey, type View } from "./arrange";
 
 type Kind = "Movie" | "Series";
-type Picking = "sort" | "genre" | "decade" | "seeing" | null;
+type Picking = "sort" | "decade" | "seeing" | null;
 
 const loaders: Record<Kind, (session: Session) => ReturnType<typeof everything>> = {
   Movie: (session) => everything(session, "Movie"),
@@ -36,10 +36,12 @@ export function Library({ type }: { type: Kind }) {
   // Averages arrive one by one; the order only follows them while sorting by them.
   const byAverage = view.sort === "average" ? known : null;
   const shown = useMemo(
-    () => arrange(all ?? [], view, marks, (item) => (item.tmdb ? known.get(item.tmdb)?.rating ?? undefined : undefined)),
-    [all, view, marks, byAverage],
+    () =>
+      arrange(all ?? [], view, marks, (item) => (item.tmdb ? known.get(item.tmdb)?.rating ?? undefined : undefined))
+        // Movies show Letterboxd's watched state, not Jellyfin's, once a log is loaded.
+        .map((item) => (item.type === "Movie" && logged && item.played !== watched(item, marks) ? { ...item, played: watched(item, marks) } : item)),
+    [all, view, marks, byAverage, logged],
   );
-  const genres = useMemo(() => genresOf(all ?? []), [all]);
   const decades = useMemo(() => decadesOf(all ?? []), [all]);
   useEnter(screen, all !== undefined || library.failed);
 
@@ -54,17 +56,12 @@ export function Library({ type }: { type: Kind }) {
   const sortLabel = sorts.find((sort) => sort.id === view.sort)?.label ?? "Name";
   const menus: Record<Exclude<Picking, null>, { title: string; options: Option[]; value: string; pick: (id: string) => void }> = {
     sort: { title: "Sort by", options: sorts, value: view.sort, pick: (id) => change({ sort: id as SortKey }) },
-    genre: {
-      title: "Genre",
-      options: [{ id: "", label: "All genres" }, ...genres.map((genre) => ({ id: genre, label: genre }))],
-      value: view.genre,
-      pick: (genre) => change({ genre }),
-    },
     seeing: {
       title: "Letterboxd",
       options: SEEINGS,
       value: view.seeing,
-      pick: (seeing) => change({ seeing: seeing as Seeing }),
+      // Picking the one already chosen turns the filter off.
+      pick: (seeing) => change({ seeing: view.seeing === seeing ? "" : (seeing as Seeing) }),
     },
     decade: {
       title: "Decade",
@@ -88,9 +85,6 @@ export function Library({ type }: { type: Kind }) {
             <Button icon="sort-ascending" onPress={() => setPicking("sort")}>
               {sortLabel}
             </Button>
-            <Button icon="funnel" on={!!view.genre} onPress={() => setPicking("genre")}>
-              {view.genre || "Genre"}
-            </Button>
             <Button icon="calendar-blank" on={!!view.decade} onPress={() => setPicking("decade")}>
               {view.decade ? `${view.decade}s` : "Decade"}
             </Button>
@@ -99,9 +93,11 @@ export function Library({ type }: { type: Kind }) {
                 {SEEINGS.find((entry) => entry.id === view.seeing)?.label.replace(" on Letterboxd", "") || "Letterboxd"}
               </Button>
             )}
-            <Button icon={view.unwatched ? "check" : "eye"} on={view.unwatched} onPress={() => change({ unwatched: !view.unwatched })}>
-              Unwatched
-            </Button>
+            {!(type === "Movie" && logged) && (
+              <Button icon={view.unwatched ? "check" : "eye"} on={view.unwatched} onPress={() => change({ unwatched: !view.unwatched })}>
+                Unwatched
+              </Button>
+            )}
             <Button icon={view.favorites ? "check" : "heart"} on={view.favorites} onPress={() => change({ favorites: !view.favorites })}>
               Favorites
             </Button>

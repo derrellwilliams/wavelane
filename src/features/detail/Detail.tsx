@@ -8,8 +8,9 @@ import { Card } from "../browse/Card";
 import { Hero } from "../browse/Hero";
 import { ItemShelf, Shelf } from "../browse/Shelf";
 import { Unreachable } from "../browse/Status";
-import { averages, describeAverage, wantAverage } from "../../letterboxd/average";
+import { averages, wantAverage } from "../../letterboxd/average";
 import { describeSeen, useMarks } from "../../letterboxd/marks";
+import { watchLog } from "../../letterboxd/store";
 import { useEnter } from "../shell/enter";
 import { openItem, play } from "../shell/route";
 
@@ -79,7 +80,7 @@ export function Detail({ id }: { id: string }) {
 
   return (
     <div ref={screen} class="detail" data-scroll="y">
-      <Hero item={item} full notes={[describeAverage(tmdb ? averages.value.get(tmdb) : undefined), describeSeen(mine.get(item.id))]}>
+      <Hero item={item} full average={tmdb ? averages.value.get(tmdb)?.rating : undefined} notes={[describeSeen(mine.get(item.id))]}>
         {(playable || type === "Series") && (
           <Button icon="play" onPress={() => void start(item.progress ? true : false)} autoFocus>
             {item.progress ? "Resume" : "Play"}
@@ -90,7 +91,8 @@ export function Detail({ id }: { id: string }) {
             Restart
           </Button>
         )}
-        {watchable && (
+        {/* Movies take watched from Letterboxd, so Jellyfin's own toggle is hidden once a log is loaded. */}
+        {watchable && !(type === "Movie" && watchLog.value.length > 0) && (
           <Button icon={state.played ? "check" : "eye"} on={state.played} onPress={() => void toggle("played")} autoFocus={!playable && type !== "Series"}>
             Watched
           </Button>

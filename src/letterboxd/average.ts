@@ -59,14 +59,6 @@ export function pickNext(library: readonly string[], wanted: readonly string[], 
   return null;
 }
 
-/// "4.51" and "6.0M ratings".
-export function describeAverage(entry: Average | undefined): string | null {
-  if (!entry || entry.rating === null) return null;
-  const count = entry.count;
-  const short = count === null ? "" : count >= 1e6 ? `${(count / 1e6).toFixed(1)}M` : count >= 1e3 ? `${Math.round(count / 1e3)}k` : String(count);
-  return `Letterboxd average ${entry.rating.toFixed(2)}${short ? ` from ${short} ratings` : ""}`;
-}
-
 /// How many library movies have a TMDB ID to look up, and until when a block or failure has paused
 /// the reading (ms since 1970, or 0). For the progress line on Account.
 export const libraryTotal = signal(0);

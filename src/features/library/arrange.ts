@@ -12,8 +12,6 @@ const SEEING: readonly string[] = ["", "watched", "unwatched", "watchlist"];
 
 export interface View {
   sort: SortKey;
-  /// "" for all genres.
-  genre: string;
   /// First year of the decade ("1990"), or "" for any.
   decade: string;
   unwatched: boolean;
@@ -22,7 +20,7 @@ export interface View {
   seeing: Seeing;
 }
 
-export const DEFAULT_VIEW: View = { sort: "name", genre: "", decade: "", unwatched: false, favorites: false, seeing: "" };
+export const DEFAULT_VIEW: View = { sort: "name", decade: "", unwatched: false, favorites: false, seeing: "" };
 
 export const SORTS: { id: SortKey; label: string }[] = [
   { id: "name", label: "Name" },
@@ -36,7 +34,6 @@ export const SORTS: { id: SortKey; label: string }[] = [
 ];
 
 export const SEEINGS: { id: Seeing; label: string }[] = [
-  { id: "", label: "All films" },
   { id: "watched", label: "Watched on Letterboxd" },
   { id: "unwatched", label: "Not watched on Letterboxd" },
   { id: "watchlist", label: "On your watchlist" },
@@ -64,7 +61,7 @@ function byName(a: Item, b: Item): number {
 const decadeOf = (item: Item) => (item.year === undefined ? "" : String(Math.floor(item.year / 10) * 10));
 
 export function isFiltered(view: View): boolean {
-  return !!view.genre || !!view.decade || view.unwatched || view.favorites || !!view.seeing;
+  return !!view.decade || view.unwatched || view.favorites || !!view.seeing;
 }
 
 /// A film in the library that isn't in the log counts as not watched.
@@ -75,13 +72,18 @@ function seeingOk(seeing: Seeing, mark: Seen | undefined): boolean {
   return !!mark?.watchlist;
 }
 
+/// Letterboxd is the source of truth for movies once a log is loaded; Jellyfin's flag is only
+/// used for shows, or for movies when there is no log.
+export function watched(item: Item, marks: Marks): boolean {
+  return marks.size > 0 && item.type === "Movie" ? !!marks.get(item.id)?.watched : item.played;
+}
+
 /// The items to show, in order. Items missing the value being sorted on go last; ties go by name.
 export function arrange(items: readonly Item[], view: View, marks: Marks = new Map(), averages: Averages = () => undefined): Item[] {
   const shown = items.filter(
     (item) =>
-      (!view.genre || item.genres.includes(view.genre)) &&
       (!view.decade || decadeOf(item) === view.decade) &&
-      (!view.unwatched || !item.played) &&
+      (!view.unwatched || !watched(item, marks)) &&
       (!view.favorites || item.favorite) &&
       seeingOk(view.seeing, marks.get(item.id)),
   );
@@ -95,13 +97,6 @@ export function arrange(items: readonly Item[], view: View, marks: Marks = new M
     if (y === undefined) return -1;
     return descending ? y - x : x - y;
   });
-}
-
-/// Every genre in the list, A to Z.
-export function genresOf(items: readonly Item[]): string[] {
-  const all = new Set<string>();
-  for (const item of items) for (const genre of item.genres) all.add(genre);
-  return [...all].sort((a, b) => a.localeCompare(b));
 }
 
 /// Every decade in the list, newest first.
@@ -120,7 +115,6 @@ export function readView(raw: string | null): View {
     return {
       sort: SORTS.some((sort) => sort.id === saved.sort) ? (saved.sort as SortKey) : "name",
       seeing: typeof saved.seeing === "string" && SEEING.includes(saved.seeing) ? (saved.seeing as Seeing) : "",
-      genre: typeof saved.genre === "string" ? saved.genre.slice(0, 60) : "",
       decade: typeof saved.decade === "string" && /^\d{4}$/.test(saved.decade) ? saved.decade : "",
       unwatched: saved.unwatched === true,
       favorites: saved.favorites === true,

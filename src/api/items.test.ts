@@ -181,8 +181,10 @@ describe("text for cards and headers", () => {
       "1995",
       "2h 50m",
       "R",
-      "8.3 / 10",
+      "8.3/10",
     ]);
+    expect(facts({ ...base, type: "Movie", rating: 8.2 }, 4.21)).toEqual(["8.2/10 • 4.2"]);
+    expect(facts({ ...base, type: "Movie" }, 4.21)).toEqual(["Letterboxd 4.2"]);
     expect(facts({ ...base, type: "Series", minutes: 50 })).toEqual([]);
   });
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Item } from "../../api/items";
-import { arrange, decadesOf, DEFAULT_VIEW, genresOf, isFiltered, readView } from "./arrange";
+import { arrange, decadesOf, DEFAULT_VIEW, isFiltered, readView } from "./arrange";
 
 function movie(name: string, more: Partial<Item> = {}): Item {
   return { id: name, type: "Movie", name, sortName: name.toLowerCase(), genres: [], played: false, favorite: false, ...more };
@@ -33,18 +33,25 @@ describe("arrange", () => {
     expect(names(arrange(tied, { ...DEFAULT_VIEW, sort: "year" }))).toEqual(["A", "B"]);
   });
 
-  it("filters by genre, decade, unwatched and favorites together", () => {
-    expect(names(arrange(LIBRARY, { ...DEFAULT_VIEW, genre: "Crime" }))).toEqual(["Heat", "Zodiac"]);
-    expect(names(arrange(LIBRARY, { ...DEFAULT_VIEW, genre: "Crime", unwatched: true }))).toEqual(["Zodiac"]);
+  it("takes watched from Letterboxd, not Jellyfin, once there is a log", () => {
+    const zodiac = LIBRARY.find((item) => item.name === "Zodiac")!;
+    const marks = new Map([[zodiac.id, { name: "Zodiac", year: 2007, uri: "", watched: true, rewatches: 0, watchlist: false }]]);
+    // Heat is played in Jellyfin but not in the log, so it still counts as unwatched.
+    expect(names(arrange(LIBRARY, { ...DEFAULT_VIEW, unwatched: true }, marks))).toEqual(["Alien", "Heat", "Mystery"]);
+    // With no log, Jellyfin's flag is used.
+    expect(names(arrange(LIBRARY, { ...DEFAULT_VIEW, unwatched: true }))).toEqual(["Alien", "Mystery", "Zodiac"]);
+  });
+
+  it("filters by decade, unwatched and favorites together", () => {
+    expect(names(arrange(LIBRARY, { ...DEFAULT_VIEW, decade: "2000", unwatched: true }))).toEqual(["Zodiac"]);
     expect(names(arrange(LIBRARY, { ...DEFAULT_VIEW, decade: "1990" }))).toEqual(["Heat"]);
     expect(names(arrange(LIBRARY, { ...DEFAULT_VIEW, favorites: true }))).toEqual(["Alien"]);
-    expect(arrange(LIBRARY, { ...DEFAULT_VIEW, favorites: true, genre: "Crime" })).toEqual([]);
+    expect(arrange(LIBRARY, { ...DEFAULT_VIEW, favorites: true, decade: "2000" })).toEqual([]);
   });
 });
 
 describe("filter choices", () => {
-  it("lists genres A to Z and decades newest first", () => {
-    expect(genresOf(LIBRARY)).toEqual(["Crime", "Drama", "Horror"]);
+  it("lists decades newest first", () => {
     expect(decadesOf(LIBRARY)).toEqual(["2000", "1990", "1970"]);
   });
 
@@ -76,7 +83,7 @@ describe("arrange with a Letterboxd log", () => {
 
 describe("readView", () => {
   it("reads back a saved view", () => {
-    const view = { sort: "rating", genre: "Crime", decade: "1990", unwatched: true, favorites: false, seeing: "watchlist" } as const;
+    const view = { sort: "rating", decade: "1990", unwatched: true, favorites: false, seeing: "watchlist" } as const;
     expect(readView(JSON.stringify(view))).toEqual(view);
   });
 
@@ -84,6 +91,6 @@ describe("readView", () => {
     expect(readView(null)).toEqual(DEFAULT_VIEW);
     expect(readView("{not json")).toEqual(DEFAULT_VIEW);
     expect(readView("null")).toEqual(DEFAULT_VIEW);
-    expect(readView(JSON.stringify({ sort: "__proto__", genre: 5, decade: "199", unwatched: "yes" }))).toEqual(DEFAULT_VIEW);
+    expect(readView(JSON.stringify({ sort: "__proto__", decade: "199", unwatched: "yes" }))).toEqual(DEFAULT_VIEW);
   });
 });

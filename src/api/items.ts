@@ -228,14 +228,17 @@ export function years(item: Item): string {
   return item.endYear && item.endYear !== item.year ? `${item.year} – ${item.endYear}` : String(item.year);
 }
 
-/// The mono line of facts under a title: years, runtime, certificate, rating.
-export function facts(item: Item): string[] {
+/// The mono line of facts under a title: years, runtime, certificate, rating. A Letterboxd average
+/// (0.5 to 5) goes next to the rating: "8.2/10 • 4.2".
+export function facts(item: Item, average?: number | null): string[] {
   const list: string[] = [];
   if (item.type === "Episode" && episodeCode(item)) list.push(episodeCode(item));
   if (years(item)) list.push(years(item));
   if (item.minutes && item.type !== "Series") list.push(runtime(item.minutes));
   if (item.certificate) list.push(item.certificate);
-  if (item.rating) list.push(`${item.rating.toFixed(1)} / 10`);
+  const stars = average ? average.toFixed(1) : "";
+  if (item.rating) list.push(`${item.rating.toFixed(1)}/10${stars ? ` • ${stars}` : ""}`);
+  else if (stars) list.push(`Letterboxd ${stars}`);
   return list;
 }
 

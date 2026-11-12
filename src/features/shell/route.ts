@@ -1,0 +1,46 @@
+/// Where the user is: one of the rail's screens, with any number of detail pages opened on top.
+/// Kept in signals (not component state) so it survives the setup check and screen swaps.
+import { signal } from "@preact/signals";
+
+export type Tab = "home" | "movies" | "shows" | "search" | "account";
+
+export interface Page {
+  id: string;
+  /// What had focus when the page was opened, to go back to.
+  from: Element | null;
+}
+
+const MAX_DEPTH = 30;
+
+export const tab = signal<Tab>("home");
+export const pages = signal<Page[]>([]);
+
+/// Set by `goBack` for the shell to focus once the screen underneath is showing again.
+export let returnTo: Element | null = null;
+
+export function openItem(target: { id: string }): void {
+  const open = pages.value;
+  if (open.length >= MAX_DEPTH || open[open.length - 1]?.id === target.id) return;
+  pages.value = [...open, { id: target.id, from: document.activeElement }];
+}
+
+/// One step back: close the top detail page, else return to Home. False when already there.
+export function goBack(): boolean {
+  const open = pages.value;
+  if (open.length) {
+    returnTo = open[open.length - 1]!.from;
+    pages.value = open.slice(0, -1);
+    return true;
+  }
+  if (tab.value !== "home") {
+    tab.value = "home";
+    return true;
+  }
+  return false;
+}
+
+export function resetRoute(): void {
+  returnTo = null;
+  pages.value = [];
+  tab.value = "home";
+}

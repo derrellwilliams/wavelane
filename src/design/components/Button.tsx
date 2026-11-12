@@ -10,10 +10,12 @@ interface Props {
   autoFocus?: boolean;
   /// Dimmed and inert, but still reachable: focus never has to jump when a button turns off.
   disabled?: boolean;
+  /// A toggle that is switched on (a filter in use, "Watched"). Leave unset for plain buttons.
+  on?: boolean;
 }
 
 /// The app's one button. Focus (remote or pointer) inverts it to a tan fill.
-export function Button({ children, onPress, icon, autoFocus, disabled }: Props) {
+export function Button({ children, onPress, icon, autoFocus, disabled, on }: Props) {
   return (
     <button
       class="button"
@@ -22,6 +24,7 @@ export function Button({ children, onPress, icon, autoFocus, disabled }: Props) 
       data-autofocus={autoFocus || undefined}
       tabIndex={-1}
       aria-disabled={disabled || undefined}
+      aria-pressed={on}
       onClick={() => {
         if (!disabled) onPress();
       }}

@@ -8,11 +8,19 @@ import { pickNext, type Direction } from "./geometry";
 import { directionOf, isBack, isOK } from "./keys";
 
 const FOCUSABLE = "[data-focusable]";
+/// A shelf, grid or row of buttons. An arrow press stays inside the group while something lies
+/// that way; only then does it look outside, and sideways it only leaves for something level with
+/// it (so Right at the end of a shelf doesn't jump diagonally to another shelf).
+const GROUP = "[data-focus-group]";
+/// A group that arrows neither enter nor leave by geometry (the rail): edge handlers do that.
+const MANUAL = "[data-focus-manual]";
 
 type BackHandler = () => void;
+type EdgeHandler = (direction: Direction, from: HTMLElement) => boolean;
 
 const scopes: HTMLElement[] = [];
 const backHandlers: BackHandler[] = [];
+const edgeHandlers: EdgeHandler[] = [];
 
 declare global {
   interface Window {
@@ -53,15 +61,62 @@ export function focusFirst(container: ParentNode = root()): void {
   if (target) focus(target);
 }
 
+function pick(from: HTMLElement, items: HTMLElement[], direction: Direction): HTMLElement | undefined {
+  return items[pickNext(from.getBoundingClientRect(), items.map((item) => item.getBoundingClientRect()), direction)];
+}
+
 export function move(direction: Direction): void {
   const from = current();
   if (!from) {
     focusFirst();
     return;
   }
-  const items = focusables().filter((item) => item !== from);
-  const next = items[pickNext(from.getBoundingClientRect(), items.map((item) => item.getBoundingClientRect()), direction)];
-  if (next) focus(next);
+  const others = focusables().filter((item) => item !== from);
+  const group = from.closest<HTMLElement>(GROUP);
+  let next: HTMLElement | undefined;
+
+  if (!group) {
+    next = pick(from, others.filter((item) => !item.closest(MANUAL)), direction);
+  } else {
+    next = pick(from, others.filter((item) => group.contains(item)), direction);
+    if (!next && !group.matches(MANUAL)) {
+      const box = from.getBoundingClientRect();
+      const sideways = direction === "left" || direction === "right";
+      const outside = others.filter((item) => {
+        if (group.contains(item) || item.closest(MANUAL)) return false;
+        const rect = item.getBoundingClientRect();
+        // Items scrolled off the side of another shelf are not somewhere an arrow should land.
+        if (rect.right <= 0 || rect.left >= window.innerWidth) return false;
+        return !sideways || (rect.bottom > box.top && rect.top < box.bottom);
+      });
+      next = pick(from, outside, direction);
+    }
+  }
+
+  if (next) {
+    focus(next);
+    return;
+  }
+  for (let index = edgeHandlers.length - 1; index >= 0; index--) {
+    if (edgeHandlers[index]!(direction, from)) return;
+  }
+}
+
+/// Registers what happens when an arrow press finds nothing that way (the shell uses it to move
+/// between the rail and the screen). Return true when handled. The newest handler is asked first.
+export function onEdge(handler: EdgeHandler): () => void {
+  edgeHandlers.push(handler);
+  return () => {
+    const index = edgeHandlers.lastIndexOf(handler);
+    if (index >= 0) edgeHandlers.splice(index, 1);
+  };
+}
+
+/// Focuses `element` if the remote can land on it. False when it is gone or hidden.
+export function focusIfUsable(element: Element | null | undefined): boolean {
+  if (!(element instanceof HTMLElement) || !element.isConnected || !usable(element)) return false;
+  focus(element);
+  return true;
 }
 
 /// Confines navigation to `element` until the returned function is called, then puts focus back
@@ -117,6 +172,12 @@ function onKeyDown(event: KeyboardEvent) {
     event.preventDefault();
     move(direction);
   } else if (isOK(event)) {
+    // A held OK presses once: without this the repeat would press whatever the first press put
+    // focus on (open a card, then switch "Watched" on the page that opened).
+    if (event.repeat) {
+      event.preventDefault();
+      return;
+    }
     // Buttons click themselves on OK. Other focusables (text field frames) need the click sent.
     const item = current();
     if (item && !(item instanceof HTMLButtonElement)) {

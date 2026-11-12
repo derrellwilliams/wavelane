@@ -3,10 +3,12 @@ import { useEffect } from "preact/hooks";
 import { refresh, signOut } from "./api/auth";
 import { ApiError } from "./api/client";
 import { session, setSession } from "./api/session";
+import { forgetEverything } from "./data/resource";
 import { Button } from "./design/components/Button";
 import { Mark } from "./design/components/Mark";
 import { Hello } from "./features/hello/Hello";
-import { Home } from "./features/home/Home";
+import { resetRoute } from "./features/shell/route";
+import { Shell } from "./features/shell/Shell";
 import { SignIn } from "./features/signin/SignIn";
 import { useAutoFocus } from "./nav/hooks";
 
@@ -16,20 +18,22 @@ import { useAutoFocus } from "./nav/hooks";
 type Status = "checking" | "ready" | "offline";
 type View = "home" | "setup";
 
-const status = signal<Status>(session.value ? "checking" : "ready");
+const status = signal<Status>("ready");
 const view = signal<View>("home");
 
-/// Confirms the saved session with the server. Only a clear "token rejected" signs the user out;
+/// Confirms the saved session with the server. At launch this runs quietly behind the app, which
+/// is already showing the last visit's library from the cache. Only a clear "token rejected" signs the user out;
 /// a server that is off or unreachable keeps the session for next time.
-async function check() {
+async function check(quiet = false) {
   const saved = session.value;
   if (!saved) return;
-  status.value = "checking";
+  if (!quiet) status.value = "checking";
   try {
     setSession(await refresh(saved));
     status.value = "ready";
   } catch (error) {
     if (error instanceof ApiError && error.status === 401) {
+      forgetEverything();
       setSession(null);
       status.value = "ready";
     } else {
@@ -41,6 +45,9 @@ async function check() {
 function leave() {
   const current = session.value;
   if (current) void signOut(current);
+  // The next person to sign in must not see this one's library.
+  forgetEverything();
+  resetRoute();
   setSession(null);
   view.value = "home";
   status.value = "ready";
@@ -66,9 +73,13 @@ function Offline({ serverName }: { serverName: string }) {
 }
 
 export function App() {
-  useEffect(() => void check(), []);
+  useEffect(() => void check(true), []);
 
   const current = session.value;
+  // Signed out (by choice, or because the server rejected the token): start from Home next time.
+  useEffect(() => {
+    if (!current) resetRoute();
+  }, [current]);
   if (!current) return <SignIn />;
   if (status.value === "checking") {
     return (
@@ -79,5 +90,5 @@ export function App() {
   }
   if (status.value === "offline") return <Offline serverName={current.serverName} />;
   if (view.value === "setup") return <Hello onClose={() => (view.value = "home")} />;
-  return <Home session={current} onSetupCheck={() => (view.value = "setup")} onSignOut={leave} />;
+  return <Shell session={current} onSetupCheck={() => (view.value = "setup")} onSignOut={leave} />;
 }

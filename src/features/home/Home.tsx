@@ -1,57 +1,64 @@
-import { versionAtLeast, type Session } from "../../api/auth";
+import { useRef } from "preact/hooks";
+import type { Session } from "../../api/auth";
+import { episodeCode, type Item } from "../../api/items";
+import { collections, favorites, latest, nextUp, resume } from "../../api/library";
 import { Button } from "../../design/components/Button";
-import { Icon } from "../../design/components/Icon";
-import { Mark } from "../../design/components/Mark";
-import { useAutoFocus } from "../../nav/hooks";
+import { useResource } from "../../data/resource";
+import { Hero } from "../browse/Hero";
+import { ItemShelf } from "../browse/Shelf";
+import { Status, Unreachable } from "../browse/Status";
+import { openItem } from "../shell/route";
+import { useEnter } from "../shell/enter";
 
-interface Props {
-  session: Session;
-  onSetupCheck: () => void;
-  onSignOut: () => void;
-}
+const latestMovies = (session: Session) => latest(session, "Movie");
+const latestShows = (session: Session) => latest(session, "Series");
 
-/// Phase 1 stand-in for Home: confirms who is signed in to what, and flags a server too old for
-/// features planned later. The real Home (shelves from the library) replaces it in phase 2.
-export function Home({ session, onSetupCheck, onSignOut }: Props) {
-  useAutoFocus();
+/// Home: a spotlight on what to watch next, then shelves. Each shelf loads on its own from the
+/// last visit's copy and refreshes behind it; a shelf with nothing in it isn't drawn.
+export function Home() {
+  const screen = useRef<HTMLDivElement>(null);
+  const watching = useResource("resume", resume);
+  const next = useResource("nextup", nextUp);
+  const movies = useResource("latest:Movie", latestMovies);
+  const shows = useResource("latest:Series", latestShows);
+  const sets = useResource("collections", collections);
+  const loved = useResource("favorites", favorites);
 
-  const missing = !versionAtLeast(session.serverVersion, 10, 9)
-    ? "Scrub thumbnails need Jellyfin 10.9 and Skip Intro needs 10.10."
-    : !versionAtLeast(session.serverVersion, 10, 10)
-      ? "Skip Intro needs Jellyfin 10.10."
-      : "";
+  const all = [watching, next, movies, shows, sets, loved];
+  const lists = all.map((shelf) => shelf.data ?? []);
+  const ready = all.some((shelf) => shelf.data !== undefined);
+  const settled = all.every((shelf) => shelf.data !== undefined || shelf.failed);
+  const empty = lists.every((list) => list.length === 0);
+  useEnter(screen, ready && !empty);
+  useEnter(screen, settled && empty);
+
+  const resuming = watching.data?.[0];
+  const spotlight: Item | undefined =
+    resuming ?? next.data?.[0] ?? movies.data?.find((item) => item.backdrop) ?? movies.data?.[0] ?? shows.data?.[0];
+  const kicker = !spotlight
+    ? undefined
+    : spotlight === resuming
+      ? "Continue watching"
+      : spotlight.type === "Episode"
+        ? `Next up${episodeCode(spotlight) ? `  ·  ${episodeCode(spotlight)}` : ""}`
+        : "Recently added";
 
   return (
-    <main class="page">
-      <Mark />
-      <h1 class="display">Signed in</h1>
-      <p class="secondary page-text">The library arrives in the next build. For now this confirms the connection.</p>
-
-      <dl class="facts">
-        <dt class="secondary">User</dt>
-        <dd>{session.userName}</dd>
-        <dt class="secondary">Server</dt>
-        <dd>{session.serverName}</dd>
-        <dt class="secondary">Address</dt>
-        <dd class="mono">{session.server}</dd>
-        <dt class="secondary">Version</dt>
-        <dd class="mono">Jellyfin {session.serverVersion}</dd>
-      </dl>
-      {missing && (
-        <p class="notice secondary">
-          <Icon name="warning" />
-          {missing}
-        </p>
+    <div ref={screen} class="screen has-hero" data-scroll="y">
+      {spotlight && (
+        <Hero item={spotlight} kicker={kicker}>
+          <Button icon="arrow-right" onPress={() => openItem(spotlight)} autoFocus>
+            Details
+          </Button>
+        </Hero>
       )}
-
-      <div class="row actions">
-        <Button icon="wrench" onPress={onSetupCheck} autoFocus>
-          Setup check
-        </Button>
-        <Button icon="sign-out" onPress={onSignOut}>
-          Sign out
-        </Button>
-      </div>
-    </main>
+      <ItemShelf title="Continue Watching" items={watching.data} shape="thumb" onOpen={openItem} />
+      <ItemShelf title="Next Up" items={next.data} shape="thumb" onOpen={openItem} />
+      <ItemShelf title="Recently Added Movies" items={movies.data} shape="poster" onOpen={openItem} />
+      <ItemShelf title="Recently Added Shows" items={shows.data} shape="poster" onOpen={openItem} />
+      <ItemShelf title="Collections" items={sets.data} shape="poster" onOpen={openItem} />
+      <ItemShelf title="Favorites" items={loved.data} shape="poster" onOpen={openItem} />
+      {settled && empty && (all.every((shelf) => shelf.failed) ? <Unreachable /> : <Status title="Nothing in the library yet" />)}
+    </div>
   );
 }

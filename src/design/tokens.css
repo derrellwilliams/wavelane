@@ -65,6 +65,29 @@
   --mark-height: 32px;
   --press-scale: 0.97;
 
+  /* Browse: the rail, artwork sizes and the shelves and grid built from them. Seven posters or
+     four wide cards fill the width beside the rail. */
+  --rail: 128px;
+  --poster-w: 222px;
+  --poster-h: 333px;
+  --thumb-w: 408px;
+  --thumb-h: 230px;
+  --person-w: 180px;
+  --person-h: 270px;
+  --card-gap: 28px;
+  --card-caption: 64px; /* title and one mono line under the artwork */
+  --grid-columns: 7;
+  --hero: 600px; /* least height of the spotlight and the detail header */
+  --hero-text: 900px;
+  --logo-w: 560px;
+  --logo-h: 180px;
+  --drawer: 600px;
+  --progress: 6px;
+  --badge: 44px;
+  --overview-lines: 4;
+  --overview-lines-short: 2;
+  --scrim: rgb(26 26 26 / 0.7); /* behind a drawer */
+
   /* Radius: artwork is square. */
   --radius-small: 10px;
   --radius-artwork: 0;

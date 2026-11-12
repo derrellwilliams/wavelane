@@ -29,7 +29,7 @@ export function authHeader(deviceId: string, token?: string): string {
 }
 
 interface Options {
-  method?: "GET" | "POST";
+  method?: "GET" | "POST" | "DELETE";
   query?: Record<string, string>;
   body?: unknown;
   timeoutMs?: number;

@@ -1,0 +1,292 @@
+/* The signed-in app: rail, screens, shelves, grid, cards, hero and detail pages. Scrolling is done
+   by nav/scroll.ts, so every scroller here just clips. Only transform and opacity animate. */
+
+.shell {
+  position: relative;
+  display: flex;
+  height: 100%;
+}
+
+/* Rail: icon-only, centred on the left edge. The screen showing is washed; focus inverts. */
+.rail {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  width: var(--rail);
+}
+.rail-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--control);
+  height: var(--control);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-small);
+  background: none;
+  color: var(--ink-2);
+  transition: transform var(--press) var(--ease-out);
+}
+.rail-item.is-active {
+  background: var(--tint);
+  color: var(--ink);
+}
+.rail-item:focus {
+  background: var(--ink);
+  color: var(--on-ink);
+}
+.rail-item:active {
+  transform: scale(var(--press-scale));
+}
+
+/* --edge is the gap on the left of everything in a screen: small beside the rail, the full
+   screen inset on a detail page (which covers the rail). */
+.content {
+  --edge: var(--space-sm);
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+}
+.screen,
+.detail {
+  height: 100%;
+  overflow: hidden;
+  padding: var(--space-xxl) 0;
+  scroll-padding: var(--space-xxl) 0;
+}
+.screen.has-hero,
+.detail {
+  padding-top: 0;
+}
+.detail {
+  --edge: var(--screen-inset);
+  position: absolute;
+  inset: 0;
+  background: var(--bg);
+}
+.detail-note {
+  padding: 0 var(--screen-inset) 0 var(--edge);
+  font-size: var(--size-small);
+}
+
+.screen-head {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-md);
+  padding: 0 var(--screen-inset) 0 var(--edge);
+}
+.title-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-md);
+}
+.status {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-md);
+  padding: var(--space-xl) var(--screen-inset) 0 var(--edge);
+}
+
+/* Shelf: the row runs to the right edge of the screen and is clipped there, so the next card
+   shows there is more. The padding leaves room for the focus frame and lift. */
+.shelf {
+  margin-top: var(--space-lg);
+}
+.shelf-title {
+  padding: 0 var(--screen-inset) 0 var(--edge);
+}
+.shelf-row {
+  display: flex;
+  gap: var(--card-gap);
+  overflow: hidden;
+  padding: var(--space-sm) var(--screen-inset) var(--space-xs) var(--edge);
+}
+.shelf-row > * {
+  flex: none;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(var(--grid-columns), var(--poster-w));
+  gap: var(--space-lg) var(--card-gap);
+  align-content: start;
+  margin-top: var(--space-lg);
+  padding-left: var(--edge);
+}
+
+/* Card */
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  width: var(--card-w);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+}
+.card-poster {
+  --card-w: var(--poster-w);
+  --card-h: var(--poster-h);
+}
+.card-thumb {
+  --card-w: var(--thumb-w);
+  --card-h: var(--thumb-h);
+}
+.card-person {
+  --card-w: var(--person-w);
+  --card-h: var(--person-h);
+}
+.card-art {
+  position: relative;
+  display: block;
+  width: var(--card-w);
+  height: var(--card-h);
+  overflow: hidden;
+  border-radius: var(--radius-artwork);
+  background: var(--placeholder);
+  box-shadow: 0 0 0 var(--focus-ring) transparent;
+  transition: transform var(--snappy) var(--ease-out);
+}
+.card:focus .card-art {
+  box-shadow: 0 0 0 var(--focus-ring) var(--ink);
+  transform: scale(var(--focus-scale));
+}
+.card-missing {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-sm);
+  overflow: hidden;
+  color: var(--ink-2);
+  font-size: var(--size-caption);
+  line-height: var(--leading-title);
+  text-align: center;
+}
+/* Artwork fades in over its placeholder once it has loaded. */
+.art {
+  opacity: 0;
+  transition: opacity var(--smooth) var(--ease-out);
+}
+.art.is-loaded {
+  opacity: 1;
+}
+.card-art .art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.card-badge {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--badge);
+  height: var(--badge);
+  background: var(--ink);
+  color: var(--on-ink);
+}
+.card-badge .icon {
+  width: var(--size-small);
+  height: var(--size-small);
+}
+.card-progress {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: var(--progress);
+  background: var(--tint-pressed);
+}
+.card-progress > span {
+  display: block;
+  height: 100%;
+  background: var(--ink);
+  transform-origin: left;
+}
+.card-text {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  height: var(--card-caption);
+}
+.card-title,
+.card-detail {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: var(--leading-title);
+}
+.card-title {
+  font-size: var(--size-small);
+}
+.card-detail {
+  color: var(--ink-2);
+  font-family: var(--mono);
+  font-size: var(--size-caption);
+}
+
+/* Hero: the backdrop fades into the canvas on the left and at the bottom, where the text sits. */
+.hero {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: var(--hero);
+  padding: var(--space-xxl) var(--screen-inset) var(--space-md) var(--edge);
+}
+.hero-art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
+}
+.hero-shade {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(to right, var(--bg) 0%, var(--bg) 15%, transparent 80%),
+    linear-gradient(to top, var(--bg) 0%, transparent 50%);
+}
+.hero-body {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  max-width: var(--hero-text);
+}
+.hero-logo {
+  max-width: var(--logo-w);
+  max-height: var(--logo-h);
+  object-fit: contain;
+  object-position: left bottom;
+}
+.hero-overview {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: var(--overview-lines);
+}
+.hero-overview.is-short {
+  -webkit-line-clamp: var(--overview-lines-short);
+}
+.hero-actions {
+  margin-top: var(--space-sm);
+}

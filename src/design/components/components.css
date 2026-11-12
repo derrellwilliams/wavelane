@@ -44,6 +44,10 @@
 .button:active:not([aria-disabled="true"]) {
   transform: scale(var(--press-scale));
 }
+.button[aria-pressed="true"]:not(:focus) {
+  background: var(--tint-pressed);
+  box-shadow: inset 0 0 0 var(--focus-ring) var(--line);
+}
 .button[aria-disabled="true"] {
   opacity: var(--unavailable);
 }
@@ -139,4 +143,58 @@
 }
 .facts dd {
   margin: 0;
+}
+
+/* Drawer: a sheet from the right with one list to choose from. */
+.drawer-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  background: var(--scrim);
+  animation: fade-in var(--snappy) var(--ease-out);
+}
+.drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  width: var(--drawer);
+  padding: var(--space-xxl) var(--space-lg);
+  background: var(--surface);
+  animation: slide-in var(--smooth) var(--ease-out);
+}
+.drawer-title {
+  padding: 0 var(--space-lg);
+}
+.drawer-list {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-xs);
+  min-height: 0;
+  margin-top: var(--space-lg);
+  overflow: hidden;
+  scroll-padding: var(--control) 0;
+}
+.drawer-option {
+  flex: none;
+  justify-content: space-between;
+  width: 100%;
+  background: none;
+}
+.drawer-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes slide-in {
+  from {
+    transform: translateX(100%);
+  }
 }

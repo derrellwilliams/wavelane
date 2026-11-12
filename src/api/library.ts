@@ -14,7 +14,7 @@ const MAX_PAGES = 15;
 /// Lists hold what sorting, filtering and (later) matching need. Overviews stay out: too heavy.
 const LIST_FIELDS = "SortName,Genres,DateCreated,ProviderIds";
 const SHELF_FIELDS = "Overview,Genres";
-const DETAIL_FIELDS = "Overview,Genres,People,ProviderIds,DateCreated,SortName";
+const DETAIL_FIELDS = "Overview,Genres,People,ProviderIds,DateCreated,SortName,MediaSources";
 const IMAGES: Query = { enableImageTypes: "Primary,Backdrop,Thumb,Logo", imageTypeLimit: "1" };
 
 function get(session: Session, path: string, query: Query, timeoutMs?: number): Promise<unknown> {

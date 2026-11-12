@@ -297,3 +297,15 @@
 .hero-actions {
   margin-top: var(--space-sm);
 }
+
+/* Shown while the server can't be reached and the screens hold saved copies. Doesn't take focus. */
+.offline {
+  position: absolute;
+  top: var(--space-md);
+  right: var(--space-lg);
+  margin: 0;
+  padding: var(--space-xs) var(--space-md);
+  background: var(--surface);
+  color: var(--ink-2);
+  pointer-events: none;
+}

@@ -3,6 +3,8 @@ import { versionAtLeast, type Session } from "../../api/auth";
 import { Button } from "../../design/components/Button";
 import { Icon } from "../../design/components/Icon";
 import { Mark } from "../../design/components/Mark";
+import { Menu } from "../../design/components/Menu";
+import { autoplayOn, QUALITIES, readQuality, saveAutoplay, saveQuality } from "../../player/settings";
 import { Connect } from "../letterboxd/Connect";
 import { SubtitleStyle } from "../player/SubtitleStyle";
 import { useEnter } from "../shell/enter";
@@ -13,13 +15,17 @@ interface Props {
   onSignOut: () => void;
 }
 
-/// Who is signed in to what, the setup check and sign-out. Stands in for Settings (phase 6), and
-/// flags a server too old for features planned later.
+/// Settings: playback (quality, autoplay), subtitles, Letterboxd, who is signed in, and About.
+/// Flags a server too old for features planned later.
 export function Account({ session, onSetupCheck, onSignOut }: Props) {
   const screen = useRef<HTMLElement>(null);
   const [styling, setStyling] = useState(false);
   const [lists, setLists] = useState(false);
   const closeLists = useCallback(() => setLists(false), []);
+  const [quality, setQuality] = useState(() => readQuality().id);
+  const [autoplay, setAutoplay] = useState(() => autoplayOn());
+  const [choosing, setChoosing] = useState(false);
+  const closeChoosing = useCallback(() => setChoosing(false), []);
   useEnter(screen, !styling && !lists);
 
   const missing = !versionAtLeast(session.serverVersion, 10, 9)
@@ -34,7 +40,7 @@ export function Account({ session, onSetupCheck, onSignOut }: Props) {
   return (
     <main ref={screen} class="page">
       <Mark />
-      <h1 class="display">Account</h1>
+      <h1 class="display">Settings</h1>
 
       <dl class="facts">
         <dt class="secondary">User</dt>
@@ -54,7 +60,22 @@ export function Account({ session, onSetupCheck, onSignOut }: Props) {
       )}
 
       <div class="row actions" data-focus-group>
-        <Button icon="wrench" onPress={onSetupCheck} autoFocus>
+        <Button icon="gauge" onPress={() => setChoosing(true)} autoFocus>
+          Quality · {QUALITIES.find((entry) => entry.id === quality)?.label.replace(" (original quality)", "")}
+        </Button>
+        <Button
+          icon={autoplay ? "check" : "play"}
+          on={autoplay}
+          onPress={() => {
+            saveAutoplay(!autoplay);
+            setAutoplay(!autoplay);
+          }}
+        >
+          Autoplay next episode
+        </Button>
+      </div>
+      <div class="row actions" data-focus-group>
+        <Button icon="wrench" onPress={onSetupCheck}>
           Setup check
         </Button>
         <Button icon="subtitles" onPress={() => setStyling(true)}>
@@ -67,6 +88,19 @@ export function Account({ session, onSetupCheck, onSignOut }: Props) {
           Sign out
         </Button>
       </div>
+      <p class="mono secondary about">Wavelane 0.1.0 · Installed apps stop opening when Developer Mode lapses: press Extend in the Developer Mode app on the TV about every 1000 hours.</p>
+      {choosing && (
+        <Menu
+          title="Max quality"
+          options={QUALITIES}
+          value={quality}
+          onPick={(id) => {
+            saveQuality(id);
+            setQuality(id);
+          }}
+          onClose={closeChoosing}
+        />
+      )}
     </main>
   );
 }

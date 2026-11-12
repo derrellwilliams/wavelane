@@ -3,6 +3,9 @@ import type { Item } from "../../api/items";
 import { children, episodeToPlay, episodes, item as fetchItem, seasons, setFavorite, setPlayed, similar, withPerson } from "../../api/library";
 import { session } from "../../api/session";
 import { Button } from "../../design/components/Button";
+import { Menu, type Option } from "../../design/components/Menu";
+import { describeChoice, languageName, loadChoice, saveChoice, type SubChoice } from "../../subtitles/choice";
+import { pickerLabel, type SubTrack } from "../../subtitles/tracks";
 import { refreshAll, useResource } from "../../data/resource";
 import { Card } from "../browse/Card";
 import { Hero } from "../browse/Hero";
@@ -41,6 +44,15 @@ export function Detail({ id }: { id: string }) {
   const held = useResource(type === "BoxSet" ? `children:${id}` : null, (current) => children(current, id));
   const credits = useResource(type === "Person" ? `person:${id}` : null, (current) => withPerson(current, id));
 
+  // Subtitles to start with. A film or episode names a track; a show names a language, taken
+  // from the episode that would play next.
+  const nextEpisode = useResource(type === "Series" ? `nextep:${id}` : null, async (current) => {
+    const episode = await episodeToPlay(current, id);
+    return episode ? fetchItem(current, episode.id) : null;
+  });
+  const [choice, setChoice] = useState<SubChoice | null>(() => loadChoice(id));
+  const [picking, setPicking] = useState(false);
+
   // Shown at once, then confirmed by the server (and put back if it refuses).
   const [local, setLocal] = useState<Partial<Record<Mark, boolean>>>({});
   useEnter(screen, !!item || main.failed);
@@ -67,9 +79,9 @@ export function Detail({ id }: { id: string }) {
     if (type === "Series") {
       // A show plays the episode to watch next.
       const episode = await episodeToPlay(current, id).catch(() => null);
-      if (episode) play(episode.id, !!episode.progress);
+      if (episode) play(episode.id, !!episode.progress, choice ?? undefined);
     } else {
-      play(id, resume);
+      play(id, resume, choice ?? undefined);
     }
   };
 
@@ -78,64 +90,97 @@ export function Detail({ id }: { id: string }) {
   const seriesId = type === "Episode" ? item.seriesId : undefined;
   const open = (target: Item) => openItem(target);
 
-  return (
-    <div ref={screen} class="detail" data-scroll="y">
-      <Hero item={item} full average={tmdb ? averages.value.get(tmdb)?.rating : undefined} notes={[describeSeen(mine.get(item.id))]}>
-        {(playable || type === "Series") && (
-          <Button icon="play" onPress={() => void start(item.progress ? true : false)} autoFocus>
-            {item.progress ? "Resume" : "Play"}
-          </Button>
-        )}
-        {playable && item.progress && (
-          <Button icon="arrow-counter-clockwise" onPress={() => play(id, false)}>
-            Restart
-          </Button>
-        )}
-        {/* Movies take watched from Letterboxd, so Jellyfin's own toggle is hidden once a log is loaded. */}
-        {watchable && !(type === "Movie" && watchLog.value.length > 0) && (
-          <Button icon={state.played ? "check" : "eye"} on={state.played} onPress={() => void toggle("played")} autoFocus={!playable && type !== "Series"}>
-            Watched
-          </Button>
-        )}
-        <Button icon={state.favorite ? "check" : "heart"} on={state.favorite} onPress={() => void toggle("favorite")} autoFocus={!watchable && !playable}>
-          Favorite
-        </Button>
-        {seriesId && (
-          <Button icon="television-simple" onPress={() => openItem({ id: seriesId })}>
-            Go to show
-          </Button>
-        )}
-      </Hero>
+  const tracks: SubTrack[] = (type === "Series" ? nextEpisode.data?.subtitles : item.subtitles) ?? [];
+  const subOptions: Option[] = [{ id: "default", label: "Default (your server settings)" }, { id: "off", label: "Off" }];
+  if (type === "Series") {
+    const seen = new Set<string>();
+    for (const track of tracks) {
+      const code = track.language?.toLowerCase();
+      if (code && !seen.has(code)) {
+        seen.add(code);
+        subOptions.push({ id: `l:${code}`, label: languageName(code) });
+      }
+    }
+  } else {
+    for (const track of tracks) subOptions.push({ id: `i:${track.index}`, label: pickerLabel(track) });
+  }
+  const subValue = !choice ? "default" : "off" in choice ? "off" : "language" in choice ? `l:${choice.language}` : `i:${choice.index}`;
+  const pickSub = (option: string) => {
+    const next: SubChoice | null =
+      option === "off" ? { off: true } : option.startsWith("l:") ? { language: option.slice(2) } : option.startsWith("i:") ? { index: Number(option.slice(2)) } : null;
+    setChoice(next);
+    saveChoice(id, next);
+  };
+  // Subtitles can be chosen where there is something to play and tracks to choose from.
+  const hasSubs = (playable || type === "Series") && tracks.length > 0;
 
-      {type === "Series" && seasonList.data && seasonList.data.length > 1 && (
-        <Shelf title="Seasons">
-          {seasonList.data.map((entry) => (
-            <Button key={entry.id} on={entry.id === seasonId} onPress={() => setChosen(entry.id)}>
-              {entry.name}
+  return (
+    <>
+      <div ref={screen} class="detail" data-scroll="y">
+        <Hero item={item} full average={tmdb ? averages.value.get(tmdb)?.rating : undefined} notes={[describeSeen(mine.get(item.id))]}>
+          {(playable || type === "Series") && (
+            <Button icon="play" onPress={() => void start(item.progress ? true : false)} autoFocus>
+              {item.progress ? "Resume" : "Play"}
             </Button>
-          ))}
-        </Shelf>
-      )}
-      {type === "Series" && (
-        <ItemShelf title={season?.name ?? "Episodes"} items={episodeList.data} shape="thumb" onOpen={open} ownTitle />
-      )}
-      <ItemShelf title="In this collection" items={held.data} shape="poster" onOpen={open} />
-      <ItemShelf title="Movies and shows" items={credits.data} shape="poster" onOpen={open} />
-      {item.people && (
-        <Shelf title="Cast and crew">
-          {item.people.map((person) => (
-            <Card
-              key={person.id}
-              shape="person"
-              art={person.art}
-              title={person.name}
-              detail={person.role}
-              onPress={() => openItem(person)}
-            />
-          ))}
-        </Shelf>
-      )}
-      <ItemShelf title="More like this" items={alike.data} shape="poster" onOpen={open} />
-    </div>
+          )}
+          {playable && item.progress && (
+            <Button icon="arrow-counter-clockwise" onPress={() => play(id, false, choice ?? undefined)}>
+              Restart
+            </Button>
+          )}
+          {/* Movies take watched from Letterboxd, so Jellyfin's own toggle is hidden once a log is loaded. */}
+          {hasSubs && (
+            <Button icon="subtitles" on={!!choice} onPress={() => setPicking(true)}>
+              {`Subtitles · ${describeChoice(tracks, choice)}`}
+            </Button>
+          )}
+          {watchable && !(type === "Movie" && watchLog.value.length > 0) && (
+            <Button icon={state.played ? "check" : "eye"} on={state.played} onPress={() => void toggle("played")} autoFocus={!playable && type !== "Series"}>
+              Watched
+            </Button>
+          )}
+          <Button icon={state.favorite ? "check" : "heart"} on={state.favorite} onPress={() => void toggle("favorite")} autoFocus={!watchable && !playable}>
+            Favorite
+          </Button>
+          {seriesId && (
+            <Button icon="television-simple" onPress={() => openItem({ id: seriesId })}>
+              Go to show
+            </Button>
+          )}
+        </Hero>
+
+        {type === "Series" && seasonList.data && seasonList.data.length > 1 && (
+          <Shelf title="Seasons">
+            {seasonList.data.map((entry) => (
+              <Button key={entry.id} on={entry.id === seasonId} onPress={() => setChosen(entry.id)}>
+                {entry.name}
+              </Button>
+            ))}
+          </Shelf>
+        )}
+        {type === "Series" && (
+          <ItemShelf title={season?.name ?? "Episodes"} items={episodeList.data} shape="thumb" onOpen={open} ownTitle />
+        )}
+        <ItemShelf title="In this collection" items={held.data} shape="poster" onOpen={open} />
+        <ItemShelf title="Movies and shows" items={credits.data} shape="poster" onOpen={open} />
+        {item.people && (
+          <Shelf title="Cast and crew">
+            {item.people.map((person) => (
+              <Card
+                key={person.id}
+                shape="person"
+                art={person.art}
+                title={person.name}
+                detail={person.role}
+                onPress={() => openItem(person)}
+              />
+            ))}
+          </Shelf>
+        )}
+        <ItemShelf title="More like this" items={alike.data} shape="poster" onOpen={open} />
+      </div>
+      {/* Outside the scrolling page, so moving through the drawer never scrolls what is under it. */}
+      {picking && <Menu title="Subtitles" options={subOptions} value={subValue} onPick={pickSub} onClose={() => setPicking(false)} />}
+    </>
   );
 }

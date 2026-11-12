@@ -3,6 +3,7 @@
 /// is only ever rendered as text); numbers are range-checked. The rest of the app and the cache
 /// only ever see an `Item`.
 import type { BaseItemDto, UserItemDataDto } from "@jellyfin/sdk/lib/generated-client/models";
+import { toSubTracks, type SubTrack } from "../subtitles/tracks";
 import { session } from "./session";
 
 export type ItemType = "Movie" | "Series" | "Season" | "Episode" | "BoxSet" | "Person";
@@ -61,6 +62,8 @@ export interface Item {
   backdrop?: Art;
   logo?: Art;
   people?: Person[];
+  /// The subtitle tracks of its first version (detail pages only).
+  subtitles?: SubTrack[];
 }
 
 const MAX_NAME = 200;
@@ -121,6 +124,8 @@ export function toItem(value: unknown): Item | null {
   const position = number(user.PlaybackPositionTicks, 1, 1e15);
   const percent = number(user.PlayedPercentage, 0, 100);
   const progress = percent !== undefined ? percent / 100 : ticks && position ? Math.min(1, position / ticks) : undefined;
+  const source = first(dto.MediaSources) as { MediaStreams?: unknown } | undefined;
+  const subtitles = toSubTracks(source?.MediaStreams);
   const end = date(dto.EndDate);
   const tmdb = dto.ProviderIds && typeof dto.ProviderIds === "object" ? dto.ProviderIds.Tmdb : undefined;
 
@@ -177,6 +182,7 @@ export function toItem(value: unknown): Item | null {
     backdrop,
     logo: art(itemId, "Logo", images.Logo) ?? art(dto.ParentLogoItemId, "Logo", dto.ParentLogoImageTag),
     people: people.length ? people : undefined,
+    subtitles: subtitles.length ? subtitles : undefined,
   };
 }
 

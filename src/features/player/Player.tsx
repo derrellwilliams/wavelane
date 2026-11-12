@@ -3,7 +3,6 @@ import type { Session } from "../../api/auth";
 import { episodeCode, type Item } from "../../api/items";
 import { episodeAfter, item as fetchItem } from "../../api/library";
 import { session as current } from "../../api/session";
-import { load } from "../../api/storage";
 import { refreshAll } from "../../data/resource";
 import { Button } from "../../design/components/Button";
 import { Icon } from "../../design/components/Icon";
@@ -13,7 +12,9 @@ import { useBack } from "../../nav/hooks";
 import { plan, PlaybackError, reportProgress, subtitleCues, reportStart, reportStop, segments as fetchSegments, trickplay as fetchTrickplay, trickplayUrl, type Plan, type Report } from "../../player/playback";
 import { activeSegment, skipLabel, type Segment } from "../../player/segments";
 import { clock, scrubTarget } from "../../player/scrub";
+import { autoplayOn, readQuality } from "../../player/settings";
 import { isBurned } from "../../subtitles/tracks";
+import { resolveChoice, type SubChoice } from "../../subtitles/choice";
 import { type Cue } from "../../subtitles/cues";
 import { readOffset, saveOffset, subtitleStyle } from "../../subtitles/style";
 import { SubtitlePanel } from "./SubtitlePanel";
@@ -26,6 +27,8 @@ interface Props {
   id: string;
   /// Start where it was left rather than from the beginning.
   resume: boolean;
+  /// What was chosen on the detail page; otherwise the server's own subtitle settings apply.
+  subtitle?: SubChoice;
   onClose: () => void;
   /// Another episode takes over (autoplay, or "Play now").
   onNext: (id: string) => void;
@@ -46,7 +49,7 @@ type Menus = "audio" | "speed" | "subs" | "style" | null;
 /// Full-screen playback. The OSD (title, controls, seek bar) shows on Up, Down, a pointer move or
 /// a pause and hides itself; while it is hidden Left and Right seek and OK pauses. Progress goes
 /// to the server every 10 s, on pause and seek, and when leaving.
-export function Player({ id, resume, onClose, onNext }: Props) {
+export function Player({ id, resume, subtitle: chosen, onClose, onNext }: Props) {
   // Handlers registered with the focus engine must keep one identity, so the parent's callbacks
   // are reached through refs.
   const closer = useRef(onClose);
@@ -92,7 +95,7 @@ export function Player({ id, resume, onClose, onNext }: Props) {
   live.current.sub = sub;
   live.current.next = skippedNext ? null : next;
 
-  const autoplay = load("autoplayNext") !== "off";
+  const autoplay = autoplayOn();
 
   const report = useCallback((): Report | null => {
     const now = live.current;
@@ -139,7 +142,7 @@ export function Player({ id, resume, onClose, onNext }: Props) {
   const begin = useCallback(
     async (user: Session, seconds: number, options: { audioIndex?: number; subtitleIndex?: number; transcode?: boolean } = {}) => {
       try {
-        const made = await plan(user, id, { startSeconds: seconds, ...options });
+        const made = await plan(user, id, { startSeconds: seconds, maxBitrate: readQuality().bitrate, ...options });
         setStart(seconds);
         setActive(made);
         setWaiting(true);
@@ -166,13 +169,16 @@ export function Player({ id, resume, onClose, onNext }: Props) {
       }
       if (gone) return;
       setItem(found);
-      const made = await begin(user, resume ? (found.resumeSeconds ?? 0) : 0);
+      // A choice made on the detail page: a track (or Off) to start with, else the server decides.
+      const wanted = resolveChoice(found.subtitles ?? [], chosen);
+      const made = await begin(user, resume ? (found.resumeSeconds ?? 0) : 0, wanted === undefined ? {} : { subtitleIndex: wanted ?? -1 });
       if (!made || gone) return;
       // The track the server picked from the user's subtitle settings (it honours the mode,
       // language and per-show choice).
-      live.current.sub = made.source.defaultSub ?? null;
+      const start = wanted === undefined ? made.source.defaultSub : wanted === null || made.source.subs.some((track) => track.index === wanted) ? wanted : made.source.defaultSub;
+      live.current.sub = start ?? null;
       setSub(live.current.sub);
-      void reportStart(user, { itemId: id, sourceId: made.source.id, playSessionId: made.playSessionId, method: made.method, seconds: resume ? (found.resumeSeconds ?? 0) : 0, paused: false, audioIndex: made.audioIndex, subtitleIndex: made.source.defaultSub ?? null });
+      void reportStart(user, { itemId: id, sourceId: made.source.id, playSessionId: made.playSessionId, method: made.method, seconds: resume ? (found.resumeSeconds ?? 0) : 0, paused: false, audioIndex: made.audioIndex, subtitleIndex: live.current.sub });
       void fetchSegments(user, id).then((list) => !gone && setSegs(list));
       void fetchTrickplay(user, id, made.source.id).then((info) => !gone && setTrick(info));
       if (found.type === "Episode") void episodeAfter(user, found).then((after) => !gone && setNext(after)).catch(() => undefined);

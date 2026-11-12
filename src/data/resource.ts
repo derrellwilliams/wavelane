@@ -27,6 +27,8 @@ const NOTHING: Loaded<never> = { failed: false };
 const entries = new Map<string, Entry>();
 /// Raised to make every screen on show ask again (after marking something watched, or Try again).
 const round = signal(0);
+/// True while the last server request failed (not a sign-out), so screens can say they show a saved copy.
+export const offline = signal(false);
 /// Raised on sign-out, so answers still on their way are thrown away.
 let generation = 0;
 
@@ -57,6 +59,7 @@ async function refresh(entry: Entry, key: string, load: () => Promise<unknown>, 
     if (mine !== generation) return;
     entry.state.value = { data, failed: false };
     entry.at = Date.now();
+    offline.value = false;
     if (persist) void writeCache(key, data);
   } catch (error) {
     if (mine !== generation) return;
@@ -66,6 +69,7 @@ async function refresh(entry: Entry, key: string, load: () => Promise<unknown>, 
       setSession(null);
       return;
     }
+    offline.value = true;
     await cached;
     if (!has() && mine === generation) entry.state.value = { failed: true };
   } finally {

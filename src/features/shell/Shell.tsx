@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef } from "preact/hooks";
 import type { Session } from "../../api/auth";
 import { everything } from "../../api/library";
-import { useResource } from "../../data/resource";
+import { offline, useResource } from "../../data/resource";
 import { setLibraryIds } from "../../letterboxd/average";
 import { refreshFeed } from "../../letterboxd/feed";
 import { applySeed } from "../../letterboxd/seed";
@@ -25,7 +25,7 @@ const TABS: { id: Tab; icon: IconName; label: string }[] = [
   { id: "movies", icon: "film-strip", label: "Movies" },
   { id: "shows", icon: "television-simple", label: "Shows" },
   { id: "search", icon: "magnifying-glass", label: "Search" },
-  { id: "account", icon: "gear-six", label: "Account" },
+  { id: "account", icon: "gear-six", label: "Settings" },
 ];
 
 const back = () => void goBack();
@@ -118,8 +118,13 @@ export function Shell({ session, onSetupCheck, onSignOut }: Props) {
         {current === "search" && <Search />}
         {current === "account" && <Account session={session} onSetupCheck={onSetupCheck} onSignOut={onSignOut} />}
       </div>
+      {offline.value && !watching && (
+        <p class="offline mono" role="status">
+          Can't reach the server. Showing saved copies.
+        </p>
+      )}
       {watching && (
-        <Player key={watching.id} id={watching.id} resume={watching.resume} onClose={() => (playing.value = null)} onNext={(id) => play(id, false)} />
+        <Player key={watching.id} id={watching.id} resume={watching.resume} subtitle={watching.subtitle} onClose={() => (playing.value = null)} onNext={(id) => play(id, false, watching.subtitle && !("index" in watching.subtitle) ? watching.subtitle : undefined)} />
       )}
       {top && <Detail key={`${depth}:${top.id}`} id={top.id} />}
     </div>

@@ -1,6 +1,7 @@
 /// Where the user is: one of the rail's screens, with any number of detail pages opened on top.
 /// Kept in signals (not component state) so it survives the setup check and screen swaps.
 import { signal } from "@preact/signals";
+import type { SubChoice } from "../../subtitles/choice";
 
 export type Tab = "home" | "movies" | "shows" | "search" | "account";
 
@@ -15,10 +16,11 @@ const MAX_DEPTH = 30;
 export const tab = signal<Tab>("home");
 export const pages = signal<Page[]>([]);
 /// The film or episode on screen in the player, if any. `resume` starts where it was left.
-export const playing = signal<{ id: string; resume: boolean } | null>(null);
+/// `subtitle` is the choice made on the detail page, if any.
+export const playing = signal<{ id: string; resume: boolean; subtitle?: SubChoice } | null>(null);
 
-export function play(id: string, resume: boolean): void {
-  playing.value = { id, resume };
+export function play(id: string, resume: boolean, subtitle?: SubChoice): void {
+  playing.value = { id, resume, subtitle };
 }
 
 /// Set by `goBack` for the shell to focus once the screen underneath is showing again.

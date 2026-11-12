@@ -4,12 +4,30 @@ import preact from "@preact/preset-vite";
 
 /// webOS loads the app from file://, where Chromium refuses module scripts and anything marked
 /// `crossorigin`. The bundle is one classic script, so the tags are rewritten to match.
+/// Only the app's own script and styles may run; pictures, video and Jellyfin requests may come
+/// from any server (the address is typed in at sign-in). `file:` is listed because a `file://`
+/// page's own files don't reliably match 'self'. Build only: the dev server needs inline scripts.
+const CSP = [
+  "default-src 'none'",
+  "script-src 'self' file:",
+  "style-src 'self' file: 'unsafe-inline'",
+  "font-src 'self' file: data:",
+  "img-src * data: blob:",
+  "media-src * blob:",
+  "connect-src *",
+  "object-src 'none'",
+  "base-uri 'none'",
+  "form-action 'none'",
+].join("; ");
+
 function webosHtml(): Plugin {
   return {
     name: "webos-html",
     enforce: "post",
-    transformIndexHtml(html) {
+    transformIndexHtml(html, context) {
+      const policy = context.server ? "" : `<meta http-equiv="Content-Security-Policy" content="${CSP}" />\n    `;
       return html
+        .replace("<title>", `${policy}<title>`)
         .replace(/<script type="module" crossorigin/g, "<script defer")
         .replace(/<link rel="stylesheet" crossorigin/g, '<link rel="stylesheet"');
     },

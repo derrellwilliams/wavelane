@@ -1,36 +1,25 @@
-import { useEffect, useMemo, useRef, useState } from "preact/hooks";
+import { useMemo, useRef, useState } from "preact/hooks";
 import type { Session } from "../../api/auth";
 import { everything } from "../../api/library";
 import { useResource } from "../../data/resource";
 import { TextField } from "../../design/components/TextField";
 import { Button } from "../../design/components/Button";
-import { Icon } from "../../design/components/Icon";
 import { useBack } from "../../nav/hooks";
-import { callService, onTV } from "../../platform/service";
-import { buildLog } from "../../letterboxd/log";
 import { matchLibrary } from "../../letterboxd/match";
 import { isUsername, setUsername, username } from "../../letterboxd/feed";
 import { averages, pausedUntil, scraping, setScraping, libraryTotal } from "../../letterboxd/average";
-import { forgetWatchLog, setWatchLog, watchLog } from "../../letterboxd/store";
+import { forgetWatchLog, watchLog } from "../../letterboxd/store";
 import { useEnter } from "../shell/enter";
-
-type Phase = { name: "idle" } | { name: "open"; url: string; code: string; locked: boolean } | { name: "failed"; why: string };
-
-interface UploadStatus {
-  state: "off" | "waiting" | "locked" | "received";
-  files?: Record<string, string>;
-}
 
 const loadMovies = (session: Session) => everything(session, "Movie");
 const MAX_SHOWN = 300;
 
-/// Letterboxd: how much of the export is in, how much of it the library has, a way to send a new
-/// export from a phone, and the films with no match. Nothing here writes to Letterboxd.
+/// Letterboxd: how much of the export is in, how much of it the library has, and the films with no
+/// match. The export comes from the build (`npm run seed`). Nothing here writes to Letterboxd.
 export function Connect({ onClose }: { onClose: () => void }) {
   const screen = useRef<HTMLElement>(null);
   const log = watchLog.value;
   const movies = useResource("all:Movie", loadMovies);
-  const [phase, setPhase] = useState<Phase>({ name: "idle" });
   const [listing, setListing] = useState(false);
   const [typed, setTyped] = useState(username.value);
   useBack(onClose);
@@ -42,51 +31,6 @@ export function Connect({ onClose }: { onClose: () => void }) {
   const watched = log.filter((film) => film.watched).length;
   const rated = log.filter((film) => film.rating !== undefined).length;
   const listed = log.filter((film) => film.watchlist).length;
-
-  // While the page is open, ask the TV's service every 2 s whether the export has arrived. Leaving
-  // the screen (or finishing) closes the page.
-  const open = phase.name === "open";
-  useEffect(() => {
-    if (!open) return;
-    let live = true;
-    const timer = setInterval(async () => {
-      try {
-        const now = await callService<UploadStatus>("uploadStatus", {}, 8000);
-        if (!live) return;
-        if (now.state === "received" && now.files) {
-          const films = buildLog({
-            watched: now.files["watched.csv"],
-            ratings: now.files["ratings.csv"],
-            diary: now.files["diary.csv"],
-            watchlist: now.files["watchlist.csv"],
-          });
-          if (films.length === 0) throw new Error("That export had no films in it");
-          setWatchLog(films);
-          setPhase({ name: "idle" });
-        } else if (now.state === "locked") {
-          setPhase((current) => (current.name === "open" ? { ...current, locked: true } : current));
-        } else if (now.state === "off") {
-          setPhase({ name: "idle" });
-        }
-      } catch (error) {
-        if (live) setPhase({ name: "failed", why: error instanceof Error ? error.message : "Something went wrong" });
-      }
-    }, 2000);
-    return () => {
-      live = false;
-      clearInterval(timer);
-      void callService("uploadClose", {}, 5000).catch(() => undefined);
-    };
-  }, [open]);
-
-  const start = async () => {
-    try {
-      const info = await callService<{ url: string; code: string }>("uploadOpen", {}, 10000);
-      setPhase({ name: "open", url: info.url, code: info.code, locked: false });
-    } catch (error) {
-      setPhase({ name: "failed", why: error instanceof Error ? error.message : "Could not open the page" });
-    }
-  };
 
   if (listing && found) {
     return (
@@ -127,7 +71,7 @@ export function Connect({ onClose }: { onClose: () => void }) {
           <dd class="mono">{found ? `${log.length - found.missing.length} of ${log.length}` : "…"}</dd>
         </dl>
       ) : (
-        <p class="secondary">No export yet. Download your data from your Letterboxd account settings, then send the zip file from your phone.</p>
+        <p class="secondary">No export in this build. Put the export folder in scratch/, run npm run seed, then rebuild.</p>
       )}
 
       <div class="row" data-focus-group>
@@ -139,32 +83,7 @@ export function Connect({ onClose }: { onClose: () => void }) {
       <p class="mono secondary">
         {scraping.value ? `Averages read: ${got} of ${libraryTotal.value} movies${waiting ? `  ·  paused until ${waiting}` : ""}` : "Averages are off"}
       </p>
-      {phase.name === "open" && (
-        <div class="stack">
-          <p>
-            On your phone, open <span class="mono">{phase.url}</span> and type the code <span class="mono display">{phase.code}</span>.
-          </p>
-          {phase.locked && <p class="secondary">Too many wrong codes. Choose Cancel and start again.</p>}
-        </div>
-      )}
-      {phase.name === "failed" && (
-        <p class="notice secondary">
-          <Icon name="warning" />
-          {phase.why}
-        </p>
-      )}
-      {!onTV && <p class="secondary">Sending an export works on the TV only.</p>}
-
       <div class="row actions" data-focus-group>
-        {phase.name === "open" ? (
-          <Button icon="x" onPress={() => setPhase({ name: "idle" })} autoFocus>
-            Cancel
-          </Button>
-        ) : (
-          <Button icon="qr-code" onPress={() => void start()} disabled={!onTV} autoFocus>
-            {log.length > 0 ? "Send a new export" : "Send export from phone"}
-          </Button>
-        )}
         {found && found.missing.length > 0 && (
           <Button icon="film-reel" onPress={() => setListing(true)}>
             Not in your library

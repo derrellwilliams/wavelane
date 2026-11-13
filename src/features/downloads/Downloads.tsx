@@ -1,19 +1,28 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { Button } from "../../design/components/Button";
 import { Menu } from "../../design/components/Menu";
-import { episodeCode } from "../../api/items";
+import { artSrc, episodeCode } from "../../api/items";
 import { sizeText, type Saved } from "../../downloads/plan";
-import { discard, refreshSpace, retry, saved, space } from "../../downloads/store";
+import {
+  discard,
+  refreshSpace,
+  retry,
+  saved,
+  space,
+} from "../../downloads/store";
 import { Status } from "../browse/Status";
 import { useEnter } from "../shell/enter";
 import { openItem, play } from "../shell/route";
 
 function line(entry: Saved): string {
-  if (entry.state === "done") return `${sizeText(entry.bytes)}${entry.kind === "converted" ? " · converted to 720p" : ""}`;
+  if (entry.state === "done")
+    return `${sizeText(entry.bytes)}${entry.kind === "converted" ? " · converted to 720p" : ""}`;
   if (entry.state === "failed") return entry.note ?? "Failed";
   if (entry.state === "queued") return "Waiting";
   const total = entry.total || entry.estimate;
-  const share = total ? Math.min(99, Math.round((entry.bytes / total) * 100)) : 0;
+  const share = total
+    ? Math.min(99, Math.round((entry.bytes / total) * 100))
+    : 0;
   return `${share}% · ${sizeText(entry.bytes)}${entry.total ? ` of ${sizeText(entry.total)}` : ""}`;
 }
 
@@ -39,11 +48,17 @@ export function Downloads() {
     <main ref={screen} class="page" data-scroll="y">
       <h1 class="display">Downloads</h1>
       <p class="secondary mono">
-        {sizeText(used)} saved{room ? ` · ${sizeText(room.free)} free of ${sizeText(room.total)}` : ""}
+        {sizeText(used)} saved
+        {room
+          ? ` · ${sizeText(room.free)} free of ${sizeText(room.total)}`
+          : ""}
       </p>
       {!list.length && (
         <Status title="Nothing saved yet">
-          <p class="secondary">Open a film or an episode and press Download. Saved films play with no connection to the server.</p>
+          <p class="secondary">
+            Open a film or an episode and press Download. Saved films play with
+            no connection to the server.
+          </p>
         </Status>
       )}
       {rest.length > 0 && <h2 class="section">On their way</h2>}
@@ -56,9 +71,19 @@ export function Downloads() {
       ))}
       {asking && (
         <Menu
-          title={asking.state === "done" ? "Delete this download?" : "Cancel this download?"}
+          title={
+            asking.state === "done"
+              ? "Delete this download?"
+              : "Cancel this download?"
+          }
           options={[
-            { id: "yes", label: asking.state === "done" ? `Delete and free ${sizeText(asking.bytes)}` : "Cancel and remove" },
+            {
+              id: "yes",
+              label:
+                asking.state === "done"
+                  ? `Delete and free ${sizeText(asking.bytes)}`
+                  : "Cancel and remove",
+            },
             { id: "no", label: "Keep it" },
           ]}
           value="no"
@@ -70,37 +95,67 @@ export function Downloads() {
   );
 }
 
-function Row({ entry, onAsk }: { entry: Saved; onAsk: (entry: Saved) => void }) {
+function Row({
+  entry,
+  onAsk,
+}: {
+  entry: Saved;
+  onAsk: (entry: Saved) => void;
+}) {
   const item = entry.item;
-  const title = item.type === "Episode" ? `${item.seriesName ?? item.name} · ${episodeCode(item)} ${item.name}` : item.name;
+  const title =
+    item.type === "Episode"
+      ? `${item.seriesName ?? item.name} · ${episodeCode(item)} ${item.name}`
+      : item.name;
+  const src = artSrc(item.poster ?? item.thumb, 80, 120);
   return (
     <div class="download" data-focus-group>
+      <span class="download-art">
+        {src && (
+          <img
+            class="art is-loaded"
+            src={src}
+            alt=""
+            loading="lazy"
+            decoding="async"
+          />
+        )}
+      </span>
       <div class="download-text">
         <span class="download-title">{title}</span>
         <span class="secondary mono">{line(entry)}</span>
         {entry.state === "running" && (
           <span class="download-bar">
-            <span style={{ transform: `scaleX(${Math.min(1, entry.bytes / (entry.total || entry.estimate || 1))})` }} />
+            <span
+              style={{
+                transform: `scaleX(${Math.min(1, entry.bytes / (entry.total || entry.estimate || 1))})`,
+              }}
+            />
           </span>
         )}
-      </div>
-      <div class="row">
-        {entry.state === "done" && (
-          <Button icon="play" onPress={() => play(entry.id, !!entry.position || !!item.progress)}>
-            {entry.position || item.progress ? "Resume" : "Play"}
+        <div class="download-actions">
+          {entry.state === "done" && (
+            <Button
+              icon="play"
+              onPress={() =>
+                play(entry.id, !!entry.position || !!item.progress)
+              }
+            >
+              {entry.position || item.progress ? "Resume" : "Play"}
+            </Button>
+          )}
+          {entry.state === "failed" && (
+            <Button icon="arrow-clockwise" onPress={() => retry(entry.id)}>
+              Try again
+            </Button>
+          )}
+          <Button icon="info" onPress={() => openItem(item)}>
+            Details
           </Button>
-        )}
-        {entry.state === "failed" && (
-          <Button icon="arrow-clockwise" onPress={() => retry(entry.id)}>
-            Try again
+          <Button icon="trash" onPress={() => onAsk(entry)}>
+            {entry.state === "done" ? "Delete" : "Cancel"}
           </Button>
-        )}
-        <Button icon="info" onPress={() => openItem(item)}>
-          Details
-        </Button>
-        <Button icon="trash" onPress={() => onAsk(entry)}>
-          {entry.state === "done" ? "Delete" : "Cancel"}
-        </Button>
+        </div>
       </div>
     </div>
   );

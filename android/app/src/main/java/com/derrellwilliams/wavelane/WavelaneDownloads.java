@@ -13,7 +13,12 @@ import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.regex.Pattern;
 
 /**
@@ -24,6 +29,8 @@ import java.util.regex.Pattern;
  */
 @CapacitorPlugin(name = "WavelaneDownloads")
 public class WavelaneDownloads extends Plugin {
+    private static final Pattern LETTERBOXD_PATH = Pattern.compile("^/[A-Za-z0-9_/]{1,80}$");
+    private static final Pattern LETTERBOXD_REDIRECT = Pattern.compile("^(?:https://letterboxd\\.com(/[^\\s]*)|(/[^\\s]*))$");
     private static final Pattern NAME = Pattern.compile("^[A-Za-z0-9._-]{1,100}$");
 
     private DownloadManager manager() {
@@ -132,6 +139,67 @@ public class WavelaneDownloads extends Plugin {
             else window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
             call.resolve();
         });
+    }
+
+    /**
+     * One GET to letterboxd.com, for the average rating and the public feed (the page has no CORS
+     * access, so the web view can't). Only that host: the caller gives a path, never a URL, and a
+     * redirect is followed only when it stays on the host. Replies over 3 MB are refused.
+     */
+    @PluginMethod
+    public void letterboxd(PluginCall call) {
+        String path = call.getString("path");
+        if (path == null || !LETTERBOXD_PATH.matcher(path).matches()) {
+            call.reject("Bad request");
+            return;
+        }
+        try {
+            for (int hop = 0; hop <= 4; hop++) {
+                HttpURLConnection connection = (HttpURLConnection) new URL("https://letterboxd.com" + path).openConnection();
+                connection.setInstanceFollowRedirects(false);
+                connection.setConnectTimeout(12000);
+                connection.setReadTimeout(12000);
+                connection.setRequestProperty("User-Agent", "Wavelane/0.1 (Android tablet app)");
+                connection.setRequestProperty("Accept", "text/html,application/rss+xml");
+                int status = connection.getResponseCode();
+                String location = connection.getHeaderField("Location");
+                if (status >= 300 && status < 400 && location != null) {
+                    connection.disconnect();
+                    java.util.regex.Matcher next = LETTERBOXD_REDIRECT.matcher(location);
+                    if (!next.matches()) {
+                        call.reject("Redirect left letterboxd.com");
+                        return;
+                    }
+                    path = next.group(1) != null ? next.group(1) : next.group(2);
+                    continue;
+                }
+                InputStream stream = status >= 400 ? connection.getErrorStream() : connection.getInputStream();
+                ByteArrayOutputStream body = new ByteArrayOutputStream();
+                if (stream != null) {
+                    byte[] buffer = new byte[16384];
+                    int read;
+                    while ((read = stream.read(buffer)) != -1) {
+                        body.write(buffer, 0, read);
+                        if (body.size() > 3 * 1024 * 1024) {
+                            connection.disconnect();
+                            call.reject("Response too large");
+                            return;
+                        }
+                    }
+                    stream.close();
+                }
+                connection.disconnect();
+                JSObject result = new JSObject();
+                result.put("status", status);
+                result.put("path", path);
+                result.put("body", new String(body.toByteArray(), StandardCharsets.UTF_8));
+                call.resolve(result);
+                return;
+            }
+            call.reject("Too many redirects");
+        } catch (Exception e) {
+            call.reject("Couldn't reach letterboxd.com");
+        }
     }
 
     @PluginMethod

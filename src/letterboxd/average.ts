@@ -5,7 +5,7 @@
 /// any store release.
 import { signal } from "@preact/signals";
 import { load, save } from "../api/storage";
-import { callService } from "../platform/service";
+import { film } from "../platform/letterboxd";
 
 export interface Average {
   /// 0.5 to 5, or null when the film has no rating (or no page).
@@ -114,7 +114,7 @@ async function step(): Promise<void> {
   if (!id) return;
   busy = true;
   try {
-    const page = await callService<{ status: number; rating: number | null; count: number | null }>("film", { tmdbId: Number(id) }, 20000);
+    const page = await film(Number(id));
     if (page.status === 403 || page.status === 429) {
       pause(BLOCKED_FOR);
     } else {

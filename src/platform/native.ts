@@ -12,6 +12,8 @@ export interface DownloadsPlugin {
   status(options: { id: number }): Promise<{ state: string; bytes: number; total: number; reason: number }>;
   remove(options: { id: number }): Promise<void>;
   keepAwake(options: { on: boolean }): Promise<void>;
+  /// One GET to letterboxd.com (the plugin only talks to that host).
+  letterboxd(options: { path: string }): Promise<{ status: number; path: string; body: string }>;
 }
 
 export const Downloads = registerPlugin<DownloadsPlugin>("WavelaneDownloads");

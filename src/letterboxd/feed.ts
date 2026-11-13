@@ -3,7 +3,7 @@
 /// ~50 films, so they add to the export rather than replace it.
 import { signal } from "@preact/signals";
 import { load, save } from "../api/storage";
-import { callService } from "../platform/service";
+import { feed } from "../platform/letterboxd";
 
 export interface Entry {
   tmdb: string;
@@ -66,7 +66,7 @@ export async function refreshFeed(force = false): Promise<void> {
   if (!name || !NAME.test(name)) return;
   if (!force && Date.now() - Number(load(AT)) < EVERY) return;
   try {
-    const reply = await callService<{ status: number; entries: unknown }>("feed", { user: name }, 20000);
+    const reply = await feed(name);
     if (reply.status !== 200) return;
     const fresh = readEntries(JSON.stringify(reply.entries));
     entries.value = fresh;

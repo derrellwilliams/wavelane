@@ -41,6 +41,8 @@ const ICONS = [
   "wrench",
   "trash",
   "download-simple",
+  "list-bullets",
+  "sliders-horizontal",
 ];
 
 const source = (name) =>

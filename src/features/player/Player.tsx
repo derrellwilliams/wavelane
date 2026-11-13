@@ -16,9 +16,10 @@ import { keepAwake } from "../../platform/awake";
 import { input, isAndroid } from "../../platform/platform";
 import { attachHls, nativeHls } from "../../player/hls";
 import { plan, PlaybackError, reportProgress, subtitleCues, reportStart, reportStop, segments as fetchSegments, trickplay as fetchTrickplay, trickplayUrl, type Plan, type Report } from "../../player/playback";
+import { chapterAt } from "../../player/chapters";
 import { activeSegment, skipLabel, type Segment } from "../../player/segments";
 import { clock, scrubTarget } from "../../player/scrub";
-import { autoplayOn, readQuality } from "../../player/settings";
+import { autoplayOn, QUALITIES, readQuality } from "../../player/settings";
 import { isBurned } from "../../subtitles/tracks";
 import { resolveChoice, type SubChoice } from "../../subtitles/choice";
 import { type Cue } from "../../subtitles/cues";
@@ -53,7 +54,7 @@ const TAP_SIDE = 0.35;
 
 const KEY = { left: 37, up: 38, right: 39, down: 40, ok: 13, play: 415, pause: 19, toggle: 10252, stop: 413, rewind: 412, forward: 417 };
 
-type Menus = "audio" | "speed" | "subs" | "style" | null;
+type Menus = "audio" | "speed" | "subs" | "style" | "chapters" | "quality" | "version" | null;
 
 /// Full-screen playback. The OSD (title, controls, seek bar) shows on Up, Down, a pointer move or
 /// a pause and hides itself; while it is hidden Left and Right seek and OK pauses. Progress goes
@@ -91,12 +92,15 @@ export function Player({ id, resume, subtitle: chosen, onClose, onNext }: Props)
   const [cues, setCues] = useState<Cue[]>([]);
   const [offset, setOffset] = useState(() => readOffset(id));
   const [note, setNote] = useState("");
+  // The highest quality asked of the server; starts at the Settings choice, and can be changed
+  // for this film from the player.
+  const [quality, setQuality] = useState(() => readQuality().id);
   // The tablet plays converted streams through hls.js when its WebView can't play HLS itself, and
   // falls back to it when the native player fails.
   const [useHls, setUseHls] = useState(() => isAndroid && !nativeHls());
 
   // Latest values for handlers that outlive a render.
-  const live = useRef({ time: 0, duration: 0, paused: false, osd: false, scrub: null as number | null, plan: null as Plan | null, leaving: false, next: null as Item | null, prompt: null as (() => void) | null, retried: false, sub: null as number | null });
+  const live = useRef({ time: 0, duration: 0, paused: false, osd: false, scrub: null as number | null, plan: null as Plan | null, leaving: false, next: null as Item | null, prompt: null as (() => void) | null, retried: false, sub: null as number | null, quality: readQuality().id });
   live.current.time = time;
   live.current.duration = duration;
   live.current.paused = paused;
@@ -105,6 +109,7 @@ export function Player({ id, resume, subtitle: chosen, onClose, onNext }: Props)
   live.current.plan = active;
   live.current.leaving = leaving;
   live.current.sub = sub;
+  live.current.quality = quality;
   live.current.next = skippedNext ? null : next;
 
   const autoplay = autoplayOn();
@@ -161,7 +166,7 @@ export function Player({ id, resume, subtitle: chosen, onClose, onNext }: Props)
       let sent: Promise<void> = Promise.resolve();
       if (live.current.plan?.local) {
         // A saved copy: note where it stopped, and send it to the server if that can be reached.
-        recordProgress(id, live.current.time, live.current.duration);
+        recordProgress(id, live.current.time, live.current.duration, true);
         sent = flushPending();
       } else if (user && body) {
         sent = reportStop(user, body);
@@ -187,9 +192,10 @@ export function Player({ id, resume, subtitle: chosen, onClose, onNext }: Props)
 
   // Load what to play.
   const begin = useCallback(
-    async (user: Session, seconds: number, options: { audioIndex?: number; subtitleIndex?: number; transcode?: boolean } = {}) => {
+    async (user: Session, seconds: number, options: { audioIndex?: number; subtitleIndex?: number; transcode?: boolean; sourceId?: string; quality?: string } = {}) => {
       try {
-        const made = await plan(user, id, { startSeconds: seconds, maxBitrate: readQuality().bitrate, ...options });
+        const bitrate = (QUALITIES.find((entry) => entry.id === (options.quality ?? live.current.quality)) ?? QUALITIES[0]!).bitrate;
+        const made = await plan(user, id, { startSeconds: seconds, maxBitrate: bitrate, sourceId: live.current.plan?.source.id, ...options });
         setStart(seconds);
         setActive(made);
         setWaiting(true);
@@ -256,6 +262,7 @@ export function Player({ id, resume, subtitle: chosen, onClose, onNext }: Props)
         method: "DirectPlay",
         local: true,
         playSessionId: "",
+        versions: [],
         source: { id: copy.sourceId ?? copy.id, directPlay: true, audio: [], subs: copy.subs, seconds: found.minutes ? found.minutes * 60 : undefined, container: copy.kind === "converted" ? "mp4 (converted)" : undefined },
       };
       setStart(seconds);
@@ -442,6 +449,23 @@ export function Player({ id, resume, subtitle: chosen, onClose, onNext }: Props)
     await begin(user, live.current.time, { audioIndex: index, subtitleIndex: live.current.sub ?? -1, transcode: now.method === "Transcode" });
   };
 
+  /// Another version of the film, or another quality ceiling: ask the server for the stream again
+  /// from where we are. The audio and subtitle choices carry over when the new version has them.
+  const restart = async (options: { sourceId?: string; quality?: string }) => {
+    const now = live.current.plan;
+    const user = current.value;
+    if (!now || !user) return;
+    flash("Switching");
+    const made = await begin(user, live.current.time, { audioIndex: now.audioIndex, subtitleIndex: live.current.sub ?? -1, transcode: now.method === "Transcode", ...options });
+    if (made && options.sourceId) {
+      const keepsSub = live.current.sub === null || made.source.subs.some((track) => track.index === live.current.sub);
+      if (!keepsSub) {
+        live.current.sub = made.source.defaultSub ?? null;
+        setSub(live.current.sub);
+      }
+    }
+  };
+
   // Text subtitles: fetch the cues for the chosen track; picture tracks are burned in by the
   // server, and Off draws nothing.
   const sourceId = active?.source.id;
@@ -601,6 +625,8 @@ export function Player({ id, resume, subtitle: chosen, onClose, onNext }: Props)
   const title = item?.type === "Episode" ? (item.seriesName ?? item.name) : (item?.name ?? "");
   const subtitle = item?.type === "Episode" ? [episodeCode(item), item.name].filter(Boolean).join(" · ") : "";
   const audioTracks = active?.source.audio ?? [];
+  const chapters = item?.chapters ?? [];
+  const chapterName = chapters[chapterAt(chapters, shown)]?.name ?? "";
   const info = active && [active.method === "DirectPlay" ? "Direct play" : "Transcoding", isAndroid && active.method === "Transcode" ? (viaHls ? "hls.js" : "native HLS") : "", active.source.container, active.source.video, active.source.audioCodec, active.source.bitrate ? `${(active.source.bitrate / 1e6).toFixed(1)} Mbps` : ""].filter(Boolean);
 
   return (
@@ -689,6 +715,21 @@ export function Player({ id, resume, subtitle: chosen, onClose, onNext }: Props)
           <Button icon="subtitles" on={sub !== null} onPress={() => setMenu("subs")}>
             Subtitles
           </Button>
+          {(item?.chapters?.length ?? 0) > 1 && (
+            <Button icon="list-bullets" onPress={() => setMenu("chapters")}>
+              Chapters
+            </Button>
+          )}
+          {!active?.local && (
+            <Button icon="sliders-horizontal" onPress={() => setMenu("quality")}>
+              Quality
+            </Button>
+          )}
+          {(active?.versions.length ?? 0) > 1 && (
+            <Button icon="film-strip" onPress={() => setMenu("version")}>
+              Version
+            </Button>
+          )}
           <Button icon="gauge" onPress={() => setMenu("speed")}>
             {speed === 1 ? "Speed" : `${speed}×`}
           </Button>
@@ -724,10 +765,12 @@ export function Player({ id, resume, subtitle: chosen, onClose, onNext }: Props)
           )}
           <div class="seek-track">
             <div class="seek-fill" style={{ transform: `scaleX(${fraction})` }} />
+            {total > 0 && chapters.slice(1).map((chapter) => <span key={chapter.start} class="seek-mark" style={{ left: `${Math.min(100, (chapter.start / total) * 100)}%` }} />)}
           </div>
         </div>
         <div class="row player-times mono">
           <span>{clock(shown)}</span>
+          {chapterName && <span class="secondary player-chapter">{chapterName}</span>}
           <span class="secondary">-{clock(Math.max(0, total - shown))}</span>
         </div>
       </div>
@@ -776,6 +819,38 @@ export function Player({ id, resume, subtitle: chosen, onClose, onNext }: Props)
           options={audioTracks.map((track) => ({ id: String(track.index), label: track.label }))}
           value={String(active.audioIndex ?? "")}
           onPick={(value) => void chooseAudio(Number(value))}
+          onClose={closeMenu}
+        />
+      )}
+      {menu === "chapters" && (
+        <Menu
+          title="Chapters"
+          options={chapters.map((chapter, position) => ({ id: String(position), label: `${clock(chapter.start)}  ${chapter.name}` }))}
+          value={String(Math.max(0, chapterAt(chapters, time)))}
+          onPick={(value) => seekTo(chapters[Number(value)]?.start ?? 0)}
+          onClose={closeMenu}
+        />
+      )}
+      {menu === "quality" && (
+        <Menu
+          title="Quality"
+          options={QUALITIES.map((entry) => ({ id: entry.id, label: entry.label }))}
+          value={quality}
+          onPick={(value) => {
+            if (value === quality) return;
+            setQuality(value);
+            live.current.quality = value;
+            void restart({ quality: value });
+          }}
+          onClose={closeMenu}
+        />
+      )}
+      {menu === "version" && active && (
+        <Menu
+          title="Version"
+          options={active.versions.map((entry) => ({ id: entry.id, label: entry.label }))}
+          value={active.source.id}
+          onPick={(value) => value !== active.source.id && void restart({ sourceId: value })}
           onClose={closeMenu}
         />
       )}

@@ -8,11 +8,31 @@ import {
   refreshSpace,
   retry,
   saved,
+  savedArt,
   space,
 } from "../../downloads/store";
 import { Status } from "../browse/Status";
 import { useEnter } from "../shell/enter";
 import { openItem, play } from "../shell/route";
+
+/// The poster kept on the tablet (works with no server), else the server's picture.
+function useArt(entry: Saved): string | null {
+  const [kept, setKept] = useState<string | null>(null);
+  useEffect(() => {
+    let url: string | null = null;
+    let gone = false;
+    void savedArt(entry.id).then((blob) => {
+      if (gone || !blob) return;
+      url = URL.createObjectURL(blob);
+      setKept(url);
+    });
+    return () => {
+      gone = true;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [entry.id]);
+  return kept ?? artSrc(entry.item.poster ?? entry.item.thumb, 80, 120);
+}
 
 function line(entry: Saved): string {
   if (entry.state === "done")
@@ -107,7 +127,7 @@ function Row({
     item.type === "Episode"
       ? `${item.seriesName ?? item.name} · ${episodeCode(item)} ${item.name}`
       : item.name;
-  const src = artSrc(item.poster ?? item.thumb, 80, 120);
+  const src = useArt(entry);
   return (
     <div class="download" data-focus-group>
       <span class="download-art">

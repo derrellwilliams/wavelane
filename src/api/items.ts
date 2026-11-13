@@ -4,6 +4,7 @@
 /// only ever see an `Item`.
 import type { BaseItemDto, UserItemDataDto } from "@jellyfin/sdk/lib/generated-client/models";
 import { input } from "../platform/platform";
+import { toChapters, type Chapter } from "../player/chapters";
 import { toSubTracks, type SubTrack } from "../subtitles/tracks";
 import { session } from "./session";
 
@@ -65,6 +66,8 @@ export interface Item {
   people?: Person[];
   /// The subtitle tracks of its first version (detail pages only).
   subtitles?: SubTrack[];
+  /// Chapter marks (detail pages only).
+  chapters?: Chapter[];
 }
 
 const MAX_NAME = 200;
@@ -127,6 +130,7 @@ export function toItem(value: unknown): Item | null {
   const progress = percent !== undefined ? percent / 100 : ticks && position ? Math.min(1, position / ticks) : undefined;
   const source = first(dto.MediaSources) as { MediaStreams?: unknown } | undefined;
   const subtitles = toSubTracks(source?.MediaStreams);
+  const chapters = toChapters(dto.Chapters);
   const end = date(dto.EndDate);
   const tmdb = dto.ProviderIds && typeof dto.ProviderIds === "object" ? dto.ProviderIds.Tmdb : undefined;
 
@@ -184,6 +188,7 @@ export function toItem(value: unknown): Item | null {
     logo: art(itemId, "Logo", images.Logo) ?? art(dto.ParentLogoItemId, "Logo", dto.ParentLogoImageTag),
     people: people.length ? people : undefined,
     subtitles: subtitles.length ? subtitles : undefined,
+    chapters: chapters.length ? chapters : undefined,
   };
 }
 

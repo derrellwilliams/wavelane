@@ -27,6 +27,8 @@ export interface AudioTrack {
 
 export interface Source {
   id: string;
+  /// The server's name for this version ("Film - 4K"), when it has one.
+  name?: string;
   etag?: string;
   directPlay: boolean;
   transcodeUrl?: string;
@@ -54,6 +56,19 @@ export interface Plan {
   audioIndex?: number;
   /// Playing a copy saved on the tablet: nothing is asked of the server.
   local?: boolean;
+  /// Every version of the film the server offers (more than one means a picker is shown).
+  versions: Version[];
+}
+
+export interface Version {
+  id: string;
+  label: string;
+}
+
+/// A label for a version in the picker: its name when it has one, else what it is made of.
+export function versionLabel(source: Source, position: number): string {
+  const parts = [source.video, source.container?.split(",")[0]?.toUpperCase(), source.size ? `${(source.size / 1e9).toFixed(1)} GB` : undefined].filter(Boolean);
+  return [source.name ?? `Version ${position + 1}`, parts.join(" · ")].filter(Boolean).join("  ·  ");
 }
 
 const safeId = (value: unknown): string | undefined =>
@@ -87,6 +102,7 @@ export function toSource(raw: unknown): Source | null {
   const transcodeUrl = typeof value.TranscodingUrl === "string" ? value.TranscodingUrl : undefined;
   return {
     id,
+    name: short(value.Name, 60),
     etag: safeId(value.ETag),
     directPlay: value.SupportsDirectPlay === true,
     transcodeUrl: transcodeUrl && transcodeUrl.length < 4000 ? transcodeUrl : undefined,
@@ -120,21 +136,22 @@ export function directUrl(session: Session, itemId: string, source: Source, play
 }
 
 /// Picks how to play from the server's answer. Throws PlaybackError with a message for the user.
-export function choosePlan(session: Session, itemId: string, reply: PlaybackInfoResponse | null, preferred?: number): Plan {
+export function choosePlan(session: Session, itemId: string, reply: PlaybackInfoResponse | null, preferred?: number, sourceId?: string): Plan {
   const sources = (Array.isArray(reply?.MediaSources) ? reply.MediaSources : []).map(toSource).filter((s): s is Source => !!s);
   const playSessionId = safeId(reply?.PlaySessionId) ?? "";
-  const source = sources[0];
+  const source = sources.find((entry) => entry.id === sourceId) ?? sources[0];
+  const versions = sources.map((entry, position) => ({ id: entry.id, label: versionLabel(entry, position) }));
   if (!source) {
     throw new PlaybackError(
       reply?.ErrorCode === "NoCompatibleStream" ? "The server can't make this play on the TV." : "The server has no playable version of this.",
     );
   }
   if (source.directPlay) {
-    return { url: directUrl(session, itemId, source, playSessionId), method: "DirectPlay", source, playSessionId, audioIndex: preferred ?? source.defaultAudio };
+    return { url: directUrl(session, itemId, source, playSessionId), method: "DirectPlay", source, playSessionId, audioIndex: preferred ?? source.defaultAudio, versions };
   }
   const url = source.transcodeUrl && withToken(session.server, source.transcodeUrl, session.token);
   if (!url) throw new PlaybackError("The server can't make this play on the TV.");
-  return { url, method: "Transcode", source, playSessionId, audioIndex: preferred ?? source.defaultAudio };
+  return { url, method: "Transcode", source, playSessionId, audioIndex: preferred ?? source.defaultAudio, versions };
 }
 
 export interface PlanOptions {
@@ -145,6 +162,8 @@ export interface PlanOptions {
   /// Skip direct play (it failed on the TV).
   transcode?: boolean;
   maxBitrate?: number;
+  /// A particular version of the film (the server's default is the first).
+  sourceId?: string;
 }
 
 export async function plan(session: Session, itemId: string, options: PlanOptions): Promise<Plan> {
@@ -158,6 +177,7 @@ export async function plan(session: Session, itemId: string, options: PlanOption
       UserId: session.userId,
       StartTimeTicks: toTicks(options.startSeconds),
       MaxStreamingBitrate: profile.MaxStreamingBitrate,
+      MediaSourceId: options.sourceId,
       AudioStreamIndex: options.audioIndex,
       SubtitleStreamIndex: options.subtitleIndex,
       AlwaysBurnInSubtitleWhenTranscoding: false,
@@ -168,7 +188,7 @@ export async function plan(session: Session, itemId: string, options: PlanOption
       AutoOpenLiveStream: false,
     },
   });
-  return choosePlan(session, itemId, reply, options.audioIndex);
+  return choosePlan(session, itemId, reply, options.audioIndex, options.sourceId);
 }
 
 /// A subtitle file for the app to draw: WebVTT from the server, else its JSON cue list. The

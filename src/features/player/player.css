@@ -261,3 +261,22 @@
 .drawer-list > * {
   flex: none;
 }
+
+.seek-track {
+  position: relative;
+}
+.seek-mark {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--bg);
+}
+.player-chapter {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

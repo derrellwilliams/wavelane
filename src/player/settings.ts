@@ -23,5 +23,9 @@ export function readQuality(raw: string | null = load("quality")): Quality {
 }
 export const saveQuality = (id: string) => save("quality", id);
 
+/// Saved films are removed from the tablet once they are watched to the end.
+export const deleteWatchedOn = (raw: string | null = load("deleteWatched")) => raw === "on";
+export const saveDeleteWatched = (on: boolean) => save("deleteWatched", on ? "on" : "off");
+
 export const autoplayOn = (raw: string | null = load("autoplayNext")) => raw !== "off";
 export const saveAutoplay = (on: boolean) => save("autoplayNext", on ? "on" : "off");

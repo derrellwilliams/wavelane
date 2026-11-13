@@ -142,6 +142,22 @@ describe("choosePlan", () => {
     expect(made.url).toContain("/stream?");
   });
 
+  it("lists every version and plays the one asked for", () => {
+    const reply = {
+      PlaySessionId: "ps",
+      MediaSources: [
+        { Id: "s1", Name: "Film - 1080p", SupportsDirectPlay: true, Size: 4e9 },
+        { Id: "s2", Name: "Film - 4K", SupportsDirectPlay: true, Size: 12e9 },
+      ],
+    };
+    expect(choosePlan(SESSION, ITEM, reply).source.id).toBe("s1");
+    const second = choosePlan(SESSION, ITEM, reply, undefined, "s2");
+    expect(second.source.id).toBe("s2");
+    expect(second.versions.map((v) => v.id)).toEqual(["s1", "s2"]);
+    expect(second.versions[1]!.label).toContain("Film - 4K");
+    expect(choosePlan(SESSION, ITEM, reply, undefined, "nope").source.id).toBe("s1");
+  });
+
   it("uses the server's HLS address otherwise, adding the token", () => {
     const made = choosePlan(SESSION, ITEM, { PlaySessionId: "ps", MediaSources: [{ Id: "s1", SupportsDirectPlay: false, TranscodingUrl: "/videos/x/master.m3u8?a=1" }] });
     expect(made).toMatchObject({ method: "Transcode", url: "http://nas:8096/videos/x/master.m3u8?a=1&api_key=tok123" });

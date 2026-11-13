@@ -5,13 +5,14 @@
 import { signal } from "@preact/signals";
 import { connectionOf, type Session } from "../api/auth";
 import { authHeader, request } from "../api/client";
-import type { Item } from "../api/items";
+import { artSrc, type Item } from "../api/items";
 import { allEpisodes } from "../api/library";
 import { session as current } from "../api/session";
 import { deviceId, load, save } from "../api/storage";
 import { deleteCache, readCache, writeCache } from "../data/cache";
 import { loadNative } from "../platform/native-load";
 import { plan as askServer, subtitleCues, toTicks } from "../player/playback";
+import { deleteWatchedOn } from "../player/settings";
 import type { Cue } from "../subtitles/cues";
 import { CONVERT, estimateBytes, fileName, fits, isFinished, nextToStart, queueProgress, toSave, type Pending, type Saved } from "./plan";
 
@@ -47,6 +48,25 @@ export const playable = (id: string): Saved | undefined => {
 };
 
 const cuesKey = (id: string, index: number) => `dl:cues:${id}:${index}`;
+const artKey = (id: string) => `dl:art:${id}`;
+
+/// The poster kept on the tablet for a saved film, so the Downloads tab has art with no server.
+export const savedArt = (id: string) => readCache<Blob>(artKey(id));
+
+/// Fetches the poster once and keeps the picture itself (images need no token). Quiet on failure:
+/// the row then falls back to the server's address while it is reachable.
+export async function keepArt(item: Item): Promise<void> {
+  if (await savedArt(item.id)) return;
+  const src = artSrc(item.poster ?? item.thumb, 120, 180);
+  if (!src) return;
+  try {
+    const reply = await fetch(src);
+    const blob = await reply.blob();
+    if (reply.ok && blob.type.startsWith("image/") && blob.size > 0 && blob.size < 2_000_000) await writeCache(artKey(item.id), blob);
+  } catch {
+    // No picture offline for this one.
+  }
+}
 export const savedCues = (id: string, index: number) => readCache<Cue[]>(cuesKey(id, index));
 
 /// The next saved episode of the same show, for Up Next while offline.
@@ -127,6 +147,7 @@ export async function enqueue(item: Item): Promise<void> {
       // That track just won't be there offline.
     }
   }
+  void keepArt(item);
   void tick();
 }
 
@@ -161,6 +182,7 @@ export async function discard(id: string): Promise<void> {
   if (!entry) return;
   put(saved.value.filter((other) => other.id !== id));
   for (const track of entry.subs) void deleteCache(cuesKey(id, track.index));
+  void deleteCache(artKey(id));
   if (entry.transfer !== undefined) {
     const native = await loadNative();
     await native?.Downloads.remove({ id: entry.transfer }).catch(() => undefined);
@@ -227,6 +249,8 @@ export async function tick(): Promise<void> {
 /// this catches up at the next launch).
 export function startRunner(): () => void {
   void tick();
+  // Films saved before posters were kept get theirs now, while the server answers.
+  for (const entry of saved.value) void keepArt(entry.item);
   const timer = setInterval(() => {
     if (saved.value.some((entry) => entry.state === "running" || entry.state === "queued")) void tick();
   }, 2000);
@@ -240,13 +264,16 @@ export async function refreshSpace(): Promise<void> {
 }
 
 /// Notes where a saved film was left, to be sent to the server when it can be reached.
-export function recordProgress(id: string, seconds: number, duration: number): void {
+/// `final` is set when playback is over (not for the 10-second saves): a film watched to the end is
+/// then removed from the tablet if Settings says so.
+export function recordProgress(id: string, seconds: number, duration: number, final = false): void {
   const finished = isFinished(seconds, duration);
   const entry = find(id);
   if (entry) change(id, { position: finished ? 0 : Math.round(seconds) });
   const next = queueProgress(pending.value, { id, seconds: finished ? 0 : Math.round(seconds), finished, at: Date.now() });
   pending.value = next;
   save("downloads.pending", JSON.stringify(next));
+  if (final && finished && deleteWatchedOn() && find(id)?.state === "done") void discard(id);
 }
 
 let flushing = false;

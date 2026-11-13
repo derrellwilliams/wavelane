@@ -4,7 +4,7 @@
 /// behind `isAndroid`), and the native bridge is reached through `loadNative()`.
 import { signal } from "@preact/signals";
 import { connectionOf, type Session } from "../api/auth";
-import { authHeader, request } from "../api/client";
+import { authHeader, readCapped, request } from "../api/client";
 import { artSrc, type Item } from "../api/items";
 import { allEpisodes } from "../api/library";
 import { session as current } from "../api/session";
@@ -53,18 +53,26 @@ const artKey = (id: string) => `dl:art:${id}`;
 /// The poster kept on the tablet for a saved film, so the Downloads tab has art with no server.
 export const savedArt = (id: string) => readCache<Blob>(artKey(id));
 
+const MAX_ART = 2_000_000;
+
 /// Fetches the poster once and keeps the picture itself (images need no token). Quiet on failure:
 /// the row then falls back to the server's address while it is reachable.
 export async function keepArt(item: Item): Promise<void> {
   if (await savedArt(item.id)) return;
   const src = artSrc(item.poster ?? item.thumb, 120, 180);
   if (!src) return;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15000);
   try {
-    const reply = await fetch(src);
-    const blob = await reply.blob();
-    if (reply.ok && blob.type.startsWith("image/") && blob.size > 0 && blob.size < 2_000_000) await writeCache(artKey(item.id), blob);
+    const reply = await fetch(src, { signal: controller.signal, credentials: "omit", redirect: "error" });
+    const type = (reply.headers.get("Content-Type") ?? "").split(";")[0]!.trim().toLowerCase();
+    if (!reply.ok || !type.startsWith("image/")) return;
+    const bytes = await readCapped(reply, MAX_ART);
+    if (bytes.byteLength > 0) await writeCache(artKey(item.id), new Blob([bytes], { type }));
   } catch {
-    // No picture offline for this one.
+    // No picture offline for this one (too big, too slow, or the server is away).
+  } finally {
+    clearTimeout(timer);
   }
 }
 export const savedCues = (id: string, index: number) => readCache<Cue[]>(cuesKey(id, index));

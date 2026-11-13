@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { findServer, quickConnectStart, signInWithPassword, signInWithQuickConnect, versionAtLeast } from "./auth";
-import { ApiError, authHeader, request } from "./client";
+import { ApiError, authHeader, readCapped, request } from "./client";
 
 const SERVER = { url: "http://192.168.86.20:8096", name: "Home", version: "10.10.7" };
 const CONNECTION = { server: SERVER.url, deviceId: "abc123", token: "tok" };
@@ -148,5 +148,49 @@ describe("versionAtLeast", () => {
     expect(versionAtLeast("10.9.11", 10, 9)).toBe(true);
     expect(versionAtLeast("11.0.0", 10, 10)).toBe(true);
     expect(versionAtLeast("nonsense", 10, 9)).toBe(false);
+  });
+});
+
+/// A reply that never ends: hands out 1 MB chunks for as long as anyone reads.
+function endless() {
+  let pulls = 0;
+  const body = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      pulls++;
+      controller.enqueue(new Uint8Array(1_000_000));
+    },
+  });
+  return { response: new Response(body), pulls: () => pulls };
+}
+
+describe("readCapped", () => {
+  it("returns the whole body up to the limit, and stops just past it", async () => {
+    await expect(readCapped(new Response("12345"), 5)).resolves.toEqual(new TextEncoder().encode("12345"));
+    await expect(readCapped(new Response("123456"), 5)).rejects.toBeInstanceOf(RangeError);
+  });
+
+  it("gives up on an endless reply without reading it all", async () => {
+    const reply = endless();
+    await expect(readCapped(reply.response, 3_000_000)).rejects.toBeInstanceOf(RangeError);
+    expect(reply.pulls()).toBeLessThan(10);
+  });
+
+  it("refuses a declared Content-Length over the limit before reading", async () => {
+    const response = new Response("small", { headers: { "Content-Length": "999999999" } });
+    await expect(readCapped(response, 1000)).rejects.toBeInstanceOf(RangeError);
+  });
+});
+
+describe("request size limits", () => {
+  it("turns an endless JSON or subtitle reply into an unreachable error", async () => {
+    vi.stubGlobal("fetch", async () => endless().response);
+    await expect(request(CONNECTION, "/Items")).rejects.toMatchObject({ status: 0 });
+    vi.stubGlobal("fetch", async () => endless().response);
+    await expect(request(CONNECTION, "/Sub.vtt", { as: "text" })).rejects.toMatchObject({ status: 0 });
+  });
+
+  it("still decodes UTF-8 text and drops a byte-order mark", async () => {
+    serve({ "GET http://192.168.86.20:8096/Sub.vtt": { text: "﻿WEBVTT\n\nNaïve" } });
+    await expect(request(CONNECTION, "/Sub.vtt", { as: "text" })).resolves.toBe("WEBVTT\n\nNaïve");
   });
 });

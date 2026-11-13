@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Item } from "../api/items";
-import { estimateBytes, fileName, fits, isFinished, nextToStart, queueProgress, SPARE_BYTES, startPosition, toSave, type Saved } from "./plan";
+import { estimateBytes, fileName, fits, groupSaved, isFinished, nextToStart, queueProgress, SPARE_BYTES, startPosition, toSave, type Saved } from "./plan";
 
 const item = (id: string, played = false) => ({ id, type: "Episode", name: id, sortName: id, genres: [], played, favorite: false }) as Item;
 const saved = (id: string, state: Saved["state"], over: Partial<Saved> = {}): Saved => ({
@@ -80,5 +80,21 @@ describe("toSave", () => {
     const list = [item("a"), item("b", true), item("c")];
     expect(toSave(list, new Set(["a"]), false).map((e) => e.id)).toEqual(["b", "c"]);
     expect(toSave(list, new Set(), true).map((e) => e.id)).toEqual(["a", "c"]);
+  });
+});
+
+describe("groupSaved", () => {
+  const ep = (id: string, seriesId: string | undefined, season: number, episode: number, addedAt: number) =>
+    saved(id, "done", { addedAt, item: { ...item(id), seriesId, season, episode } as Item });
+
+  it("gathers episodes under their show in order and keeps films alone", () => {
+    const film = saved("f", "done", { addedAt: 5, item: { ...item("f"), type: "Movie" } as Item });
+    const groups = groupSaved([ep("b", "s", 1, 2, 1), ep("a", "s", 1, 1, 2), film, ep("c", "t", 1, 1, 3)]);
+    expect(groups.map((group) => group.key)).toEqual(["item:f", "show:t", "show:s"]);
+    expect(groups[2]!.entries.map((entry) => entry.id)).toEqual(["a", "b"]);
+  });
+
+  it("treats an episode with no show id as its own tile", () => {
+    expect(groupSaved([ep("x", undefined, 1, 1, 0)])[0]!.seriesId).toBeUndefined();
   });
 });

@@ -18,14 +18,16 @@ interface Props {
   autoFocus?: boolean;
   /// Position in a grid, so the grid can tell which row has focus.
   index?: number;
+  /// A ready picture address (a poster kept on the device) used instead of the server's `art`.
+  src?: string | null;
 }
 
 /// Artwork with a title under it: the thing every shelf and grid is made of. Focus frames the
 /// artwork in tan and lifts it slightly. Until the image arrives (or if there is none) the title
 /// shows in its place.
-export function Card({ shape, art, title, detail, onPress, onHold, progress, played, autoFocus, index }: Props) {
+export function Card({ shape, art, title, detail, onPress, onHold, progress, played, autoFocus, index, src: given }: Props) {
   const press = useHold(onHold, onPress);
-  const src = artSrc(art, token(`--${shape}-w`), token(`--${shape}-h`));
+  const src = given ?? artSrc(art, token(`--${shape}-w`), token(`--${shape}-h`));
   return (
     <button
       class={`card card-${shape}`}

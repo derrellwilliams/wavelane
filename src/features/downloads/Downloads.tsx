@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from "preact/hooks";
-import { Button } from "../../design/components/Button";
+import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import { Menu } from "../../design/components/Menu";
 import { artSrc, episodeCode } from "../../api/items";
-import { sizeText, type Saved } from "../../downloads/plan";
+import { useBack } from "../../nav/hooks";
+import { groupSaved, sizeText, type Saved, type SavedGroup } from "../../downloads/plan";
 import {
   discard,
   refreshSpace,
@@ -11,6 +11,7 @@ import {
   savedArt,
   space,
 } from "../../downloads/store";
+import { Card } from "../browse/Card";
 import { Status } from "../browse/Status";
 import { useEnter } from "../shell/enter";
 import { openItem, play } from "../shell/route";
@@ -53,6 +54,7 @@ export function Downloads() {
   const list = saved.value;
   const room = space.value;
   const [asking, setAsking] = useState<Saved | null>(null);
+  const [acting, setActing] = useState<Saved | null>(null);
   useEnter(screen, true);
   useEffect(() => {
     void refreshSpace();
@@ -60,15 +62,23 @@ export function Downloads() {
     return () => clearInterval(timer);
   }, []);
 
+  const [show, setShow] = useState<string | null>(null);
+  const leave = useCallback(() => setShow(null), []);
+  useBack(show ? leave : null);
+
   const used = list.reduce((sum, entry) => sum + entry.bytes, 0);
-  const ready = list.filter((entry) => entry.state === "done");
-  const rest = list.filter((entry) => entry.state !== "done");
+  const groups = groupSaved(list);
+  const open = show ? groups.find((group) => group.key === show) : undefined;
+  // The last episode of an open show was deleted: back to the list.
+  useEffect(() => {
+    if (show && !open) setShow(null);
+  }, [show, open]);
 
   return (
     <main ref={screen} class="page" data-scroll="y">
-      <h1 class="display">Downloads</h1>
+      <h1 class="display">{open ? showName(open) : "Downloads"}</h1>
       <p class="secondary mono">
-        {sizeText(used)} saved
+        {sizeText(open ? open.entries.reduce((sum, entry) => sum + entry.bytes, 0) : used)} saved
         {room
           ? ` · ${sizeText(room.free)} free of ${sizeText(room.total)}`
           : ""}
@@ -81,14 +91,71 @@ export function Downloads() {
           </p>
         </Status>
       )}
-      {rest.length > 0 && <h2 class="section">On their way</h2>}
-      {rest.map((entry) => (
-        <Row key={entry.id} entry={entry} onAsk={setAsking} />
-      ))}
-      {ready.length > 0 && <h2 class="section">Saved on this tablet</h2>}
-      {ready.map((entry) => (
-        <Row key={entry.id} entry={entry} onAsk={setAsking} />
-      ))}
+      {list.length > 0 && (
+        <div class="grid" data-focus-group>
+          {open
+            ? open.entries.map((entry, index) => (
+                <DownloadCard
+                  key={entry.id}
+                  entry={entry}
+                  title={`${episodeCode(entry.item)} ${entry.item.name}`.trim()}
+                  detail={line(entry)}
+                  progress={fraction(entry)}
+                  autoFocus={index === 0}
+                  onPress={() => setActing(entry)}
+                />
+              ))
+            : groups.map((group, index) => {
+                const first = group.entries[0]!;
+                return (
+                  <DownloadCard
+                    key={group.key}
+                    entry={first}
+                    title={showName(group)}
+                    detail={groupLine(group)}
+                    progress={group.seriesId ? undefined : fraction(first)}
+                    autoFocus={index === 0}
+                    onPress={() => (group.seriesId ? setShow(group.key) : setActing(first))}
+                  />
+                );
+              })}
+        </div>
+      )}
+      {acting && (
+        <Menu
+          title={acting.item.type === "Episode" ? `${acting.item.seriesName ?? acting.item.name} ${episodeCode(acting.item)}`.trim() : acting.item.name}
+          options={[
+            ...(acting.state === "done"
+              ? [
+                  {
+                    id: "play",
+                    label:
+                      acting.position || acting.item.progress
+                        ? "Resume"
+                        : "Play",
+                  },
+                ]
+              : []),
+            ...(acting.state === "failed"
+              ? [{ id: "retry", label: "Try again" }]
+              : []),
+            { id: "details", label: "Details" },
+            {
+              id: "delete",
+              label: acting.state === "done" ? "Delete" : "Cancel download",
+            },
+          ]}
+          value=""
+          onPick={(choice) => {
+            if (choice === "play")
+              play(acting.id, !!acting.position || !!acting.item.progress);
+            else if (choice === "retry") retry(acting.id);
+            else if (choice === "details") openItem(acting.item);
+            else setAsking(acting);
+          }}
+          onClose={() => setActing(null)}
+        />
+      )}
       {asking && (
         <Menu
           title={
@@ -115,68 +182,51 @@ export function Downloads() {
   );
 }
 
-function Row({
+function showName(group: SavedGroup): string {
+  const item = group.entries[0]!.item;
+  return group.seriesId ? (item.seriesName ?? item.name) : item.name;
+}
+
+function fraction(entry: Saved): number | undefined {
+  const total = entry.total || entry.estimate;
+  return entry.state === "running" && total ? Math.min(1, entry.bytes / total) : undefined;
+}
+
+/// A show's tile: how many episodes, how big, and whether any are still coming.
+function groupLine(group: SavedGroup): string {
+  if (!group.seriesId) return line(group.entries[0]!);
+  const done = group.entries.filter((entry) => entry.state === "done");
+  const count = `${done.length} episode${done.length === 1 ? "" : "s"}`;
+  const coming = group.entries.length - done.length;
+  return `${count}${coming ? ` · ${coming} on the way` : ""}`;
+}
+
+function DownloadCard({
   entry,
-  onAsk,
+  title,
+  detail,
+  progress,
+  autoFocus,
+  onPress,
 }: {
   entry: Saved;
-  onAsk: (entry: Saved) => void;
+  title: string;
+  detail: string;
+  progress: number | undefined;
+  autoFocus: boolean;
+  onPress: () => void;
 }) {
-  const item = entry.item;
-  const title =
-    item.type === "Episode"
-      ? `${item.seriesName ?? item.name} · ${episodeCode(item)} ${item.name}`
-      : item.name;
   const src = useArt(entry);
   return (
-    <div class="download" data-focus-group>
-      <span class="download-art">
-        {src && (
-          <img
-            class="art is-loaded"
-            src={src}
-            alt=""
-            loading="lazy"
-            decoding="async"
-          />
-        )}
-      </span>
-      <div class="download-text">
-        <span class="download-title">{title}</span>
-        <span class="secondary mono">{line(entry)}</span>
-        {entry.state === "running" && (
-          <span class="download-bar">
-            <span
-              style={{
-                transform: `scaleX(${Math.min(1, entry.bytes / (entry.total || entry.estimate || 1))})`,
-              }}
-            />
-          </span>
-        )}
-        <div class="download-actions">
-          {entry.state === "done" && (
-            <Button
-              icon="play"
-              onPress={() =>
-                play(entry.id, !!entry.position || !!item.progress)
-              }
-            >
-              {entry.position || item.progress ? "Resume" : "Play"}
-            </Button>
-          )}
-          {entry.state === "failed" && (
-            <Button icon="arrow-clockwise" onPress={() => retry(entry.id)}>
-              Try again
-            </Button>
-          )}
-          <Button icon="info" onPress={() => openItem(item)}>
-            Details
-          </Button>
-          <Button icon="trash" onPress={() => onAsk(entry)}>
-            {entry.state === "done" ? "Delete" : "Cancel"}
-          </Button>
-        </div>
-      </div>
-    </div>
+    <Card
+      shape="poster"
+      art={undefined}
+      src={src}
+      title={title}
+      detail={detail}
+      onPress={onPress}
+      progress={progress}
+      autoFocus={autoFocus}
+    />
   );
 }

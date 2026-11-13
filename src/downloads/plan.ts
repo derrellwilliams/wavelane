@@ -109,3 +109,29 @@ export function sizeText(bytes: number): string {
   if (bytes >= 1e9) return `${(bytes / 1e9).toFixed(1)} GB`;
   return `${Math.max(1, Math.round(bytes / 1e6))} MB`;
 }
+
+/// One tile on the Downloads tab: a film, or every saved episode of one show.
+export interface SavedGroup {
+  key: string;
+  /// The show's id when the tile is a show.
+  seriesId?: string;
+  /// A film is one entry; a show's episodes run in season and episode order.
+  entries: Saved[];
+}
+
+/// Films stand alone; episodes gather under their show. Newest additions come first.
+export function groupSaved(list: readonly Saved[]): SavedGroup[] {
+  const groups = new Map<string, SavedGroup>();
+  for (const entry of list) {
+    const seriesId = entry.item.type === "Episode" ? entry.item.seriesId : undefined;
+    const key = seriesId ? `show:${seriesId}` : `item:${entry.id}`;
+    const group = groups.get(key) ?? { key, seriesId, entries: [] };
+    group.entries.push(entry);
+    groups.set(key, group);
+  }
+  const order = (entry: Saved) => (entry.item.season ?? 0) * 100000 + (entry.item.episode ?? 0);
+  const newest = (group: SavedGroup) => Math.max(...group.entries.map((entry) => entry.addedAt));
+  const out = [...groups.values()];
+  for (const group of out) if (group.seriesId) group.entries.sort((a, b) => order(a) - order(b));
+  return out.sort((a, b) => newest(b) - newest(a));
+}

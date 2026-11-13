@@ -19,7 +19,6 @@ import { KidsHome } from "../kids/KidsHome";
 import { Library } from "../library/Library";
 import { Search } from "../search/Search";
 import "../browse/browse.css";
-import "../downloads/downloads.css";
 import "../player/player.css";
 import { Player } from "../player/Player";
 import { ACTIVE } from "./enter";

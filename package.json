@@ -21,7 +21,7 @@
     "@capacitor/core": "8.6.0",
     "@preact/signals": "2.11.4",
     "hls.js": "1.7.4",
-    "preact": "^11.1.0"
+    "preact": "^11.2.0"
   },
   "devDependencies": {
     "@capacitor/cli": "8.6.0",

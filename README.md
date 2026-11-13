@@ -4,7 +4,16 @@
 
 ## Screenshots
 
-**Android tablet (Fire HD 8), Home**
+**Android tablet (Fire HD 8)**
 
-![Wavetile TV Home on the Android tablet](docs/screenshots/android-home.png)
+<table>
+  <tr>
+    <td><img src="docs/screenshots/android-home.png" alt="Home"></td>
+    <td><img src="docs/screenshots/android-movies.png" alt="Movies"></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/android-detail-1.png" alt="Movie details"></td>
+    <td><img src="docs/screenshots/android-detail-2.png" alt="Movie details"></td>
+  </tr>
+</table>
 

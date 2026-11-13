@@ -280,3 +280,56 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Over bright video the washed buttons vanish, so inside the player they are dark grey, a little
+   see-through, with a thin edge; the focused or pressed one fills tan with dark text. The scrims
+   are darker and the seek bar stronger for the same reason. */
+.player-top {
+  background: linear-gradient(to bottom, rgb(0 0 0 / 0.85), transparent);
+}
+.player-bottom {
+  background: linear-gradient(to top, rgb(0 0 0 / 0.9), transparent);
+}
+.player .button {
+  background: rgb(38 38 38 / 0.78);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px rgb(236 228 210 / 0.18);
+}
+.player .button:focus,
+.player .button:active:not([aria-disabled="true"]) {
+  background: var(--ink);
+  color: var(--on-ink);
+  box-shadow: none;
+}
+.player .button[aria-pressed="true"]:not(:focus) {
+  background: var(--bg);
+  box-shadow: inset 0 0 0 var(--focus-ring) var(--ink);
+}
+.player-top h1,
+.player-top p,
+.player-times {
+  text-shadow: 0 1px 4px #000;
+}
+.seek-track {
+  background: rgb(236 228 210 / 0.4);
+}
+
+/* The tablet's touch rules (touch.css) restyle .button:focus, :active and [aria-pressed] with the
+   washed tint, and are more specific than the rules above, so the player repeats its colours here:
+   a tap fills tan with dark text while the finger is down; a tapped control doesn't stay lit; a
+   toggled-on one is solid dark with a tan ring. */
+html[data-platform="android"] .player .button:focus {
+  background: rgb(38 38 38 / 0.78);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px rgb(236 228 210 / 0.18);
+}
+html[data-platform="android"] .player .button[aria-pressed="true"] {
+  background: var(--bg);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 var(--focus-ring) var(--ink);
+}
+html[data-platform="android"] .player .button:active:not([aria-disabled="true"]) {
+  background: var(--ink);
+  color: var(--on-ink);
+  box-shadow: none;
+}

@@ -9,14 +9,17 @@ import { Icon } from "../../design/components/Icon";
 import type { IconName } from "../../design/icons.gen";
 import { focusFirst, focusIfUsable, onEdge } from "../../nav/focus";
 import { useBack } from "../../nav/hooks";
-import { input } from "../../platform/platform";
+import { flushPending, startRunner } from "../../downloads/store";
+import { input, isAndroid } from "../../platform/platform";
 import { Account } from "../account/Account";
 import { Detail } from "../detail/Detail";
+import { Downloads } from "../downloads/Downloads";
 import { Home } from "../home/Home";
 import { KidsHome } from "../kids/KidsHome";
 import { Library } from "../library/Library";
 import { Search } from "../search/Search";
 import "../browse/browse.css";
+import "../downloads/downloads.css";
 import "../player/player.css";
 import { Player } from "../player/Player";
 import { ACTIVE } from "./enter";
@@ -28,8 +31,12 @@ const TABS: { id: Tab; icon: IconName; label: string }[] = [
   { id: "shows", icon: "television-simple", label: "Shows" },
   { id: "kids", icon: "balloon", label: "Kids" },
   { id: "search", icon: "magnifying-glass", label: "Search" },
+  // Saving films to the device is the tablet's: the TV has no such tab.
+  ...(isAndroid ? [{ id: "downloads" as const, icon: "download-simple" as const, label: "Downloads" }] : []),
   { id: "account", icon: "gear-six", label: "Settings" },
 ];
+
+let openedOffline = false;
 
 const back = () => void goBack();
 const loadMovies = (session: Session) => everything(session, "Movie");
@@ -66,6 +73,26 @@ export function Shell({ session, onSetupCheck, onSignOut }: Props) {
     const timer = setInterval(() => void refreshFeed(), 60 * 60 * 1000);
     return () => clearInterval(timer);
   }, []);
+
+  // The tablet: watch the transfers, send progress made offline once the server answers, and when
+  // the server can't be reached at launch start on the Downloads tab (the only screen that works).
+  useEffect(() => {
+    if (!isAndroid) return;
+    const stop = startRunner();
+    void flushPending();
+    const timer = setInterval(() => void flushPending(), 60 * 1000);
+    return () => {
+      stop();
+      clearInterval(timer);
+    };
+  }, []);
+  const away = offline.value;
+  useEffect(() => {
+    if (isAndroid && away && !openedOffline && tab.value === "home" && !pages.value.length && !playing.value) {
+      openedOffline = true;
+      tab.value = "downloads";
+    }
+  }, [away]);
 
   useBack(top || current !== "home" ? back : null);
 
@@ -123,6 +150,7 @@ export function Shell({ session, onSetupCheck, onSignOut }: Props) {
         {current === "shows" && <Library key="Series" type="Series" />}
         {current === "kids" && <KidsHome />}
         {current === "search" && <Search />}
+        {current === "downloads" && <Downloads />}
         {current === "account" && <Account session={session} onSetupCheck={onSetupCheck} onSignOut={onSignOut} />}
       </div>
       {offline.value && !watching && (

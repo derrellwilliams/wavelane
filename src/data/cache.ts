@@ -38,6 +38,10 @@ function open(): Promise<IDBDatabase | null> {
   return opening;
 }
 
+/// Keys under "dl:" belong to films saved on the tablet (their subtitle cues): they stay until the
+/// film is deleted, however old, and signing out of the library cache doesn't touch them.
+const isSaved = (key: IDBValidKey | undefined) => typeof key === "string" && key.startsWith("dl:");
+
 /// Drops entries not refreshed for a month (items long gone from the library).
 function prune(db: IDBDatabase): void {
   try {
@@ -47,7 +51,7 @@ function prune(db: IDBDatabase): void {
       const at = cursor.result;
       if (!at) return;
       const row = at.value as Row | undefined;
-      if (!row || !(row.at >= cutoff)) at.delete();
+      if (!isSaved(at.key) && (!row || !(row.at >= cutoff))) at.delete();
       at.continue();
     };
   } catch {
@@ -79,8 +83,20 @@ export async function writeCache(key: string, value: unknown): Promise<void> {
 export async function clearCache(): Promise<void> {
   try {
     const db = await open();
-    if (db) await done(db.transaction(STORE, "readwrite").objectStore(STORE).clear());
+    if (!db) return;
+    const store = db.transaction(STORE, "readwrite").objectStore(STORE);
+    const keys = (await done(store.getAllKeys())) as IDBValidKey[];
+    for (const key of keys) if (!isSaved(key)) store.delete(key);
   } catch {
     // Nothing to clear.
+  }
+}
+
+export async function deleteCache(key: string): Promise<void> {
+  try {
+    const db = await open();
+    if (db) await done(db.transaction(STORE, "readwrite").objectStore(STORE).delete(key));
+  } catch {
+    // Nothing to delete.
   }
 }

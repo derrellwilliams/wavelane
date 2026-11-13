@@ -150,6 +150,10 @@ export async function episodeToPlay(session: Session, seriesId: string): Promise
   return first[0] ?? null;
 }
 
+/// Every regular episode of a show, in order (for saving a whole show).
+export const allEpisodes = (session: Session, seriesId: string) =>
+  list(session, `/Shows/${seriesId}/Episodes`, { isSpecialSeason: "false", fields: "Overview" });
+
 /// The episode after this one in its show, if any.
 export async function episodeAfter(session: Session, episode: Item): Promise<Item | null> {
   if (!episode.seriesId) return null;

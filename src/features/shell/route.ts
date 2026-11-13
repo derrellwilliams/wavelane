@@ -4,7 +4,7 @@ import { signal } from "@preact/signals";
 import type { SubChoice } from "../../subtitles/choice";
 import { undismiss } from "../browse/dismissed";
 
-export type Tab = "home" | "movies" | "shows" | "kids" | "search" | "account";
+export type Tab = "home" | "movies" | "shows" | "kids" | "search" | "downloads" | "account";
 
 export interface Page {
   id: string;

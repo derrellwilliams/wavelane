@@ -39,6 +39,8 @@ const ICONS = [
   "television-simple",
   "warning",
   "wrench",
+  "trash",
+  "download-simple",
 ];
 
 const source = (name) =>

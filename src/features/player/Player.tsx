@@ -4,6 +4,9 @@ import { episodeCode, type Item } from "../../api/items";
 import { episodeAfter, item as fetchItem } from "../../api/library";
 import { session as current } from "../../api/session";
 import { refreshAll } from "../../data/resource";
+import { flushPending, nextSaved, playable, recordProgress, savedCues } from "../../downloads/store";
+import { startPosition, type Saved } from "../../downloads/plan";
+import { loadNative } from "../../platform/native-load";
 import { Button } from "../../design/components/Button";
 import { Icon } from "../../design/components/Icon";
 import { Menu } from "../../design/components/Menu";
@@ -137,6 +140,10 @@ export function Player({ id, resume, subtitle: chosen, onClose, onNext }: Props)
 
   const progress = useCallback(() => {
     if (live.current.leaving) return; // a late pause event must not follow the stop report
+    if (live.current.plan?.local) {
+      recordProgress(id, live.current.time, live.current.duration);
+      return;
+    }
     const user = current.value;
     const body = report();
     if (user && body) void reportProgress(user, body);
@@ -151,13 +158,20 @@ export function Player({ id, resume, subtitle: chosen, onClose, onNext }: Props)
       video.current?.pause();
       const user = current.value;
       const body = report();
-      const sent = user && body ? reportStop(user, body) : Promise.resolve();
+      let sent: Promise<void> = Promise.resolve();
+      if (live.current.plan?.local) {
+        // A saved copy: note where it stopped, and send it to the server if that can be reached.
+        recordProgress(id, live.current.time, live.current.duration);
+        sent = flushPending();
+      } else if (user && body) {
+        sent = reportStop(user, body);
+      }
       void Promise.race([sent, new Promise((resolve) => setTimeout(resolve, LEAVE_WAIT_MS))]).then(() => {
         refreshAll();
         then();
       });
     },
-    [report],
+    [report, id],
   );
 
   const close = useCallback(() => leave(() => closer.current()), [leave]);
@@ -189,6 +203,8 @@ export function Player({ id, resume, subtitle: chosen, onClose, onNext }: Props)
   );
 
   useEffect(() => {
+    const copy = playable(id);
+    if (copy) return playSaved(copy);
     const user = current.value;
     if (!user) return;
     let gone = false;
@@ -220,6 +236,35 @@ export function Player({ id, resume, subtitle: chosen, onClose, onNext }: Props)
       gone = true;
     };
   }, [id]);
+
+  /// Plays the copy saved on the tablet: no server needed (it is online or not). Where to start is
+  /// the later of the tablet's position and the server's last known one; subtitles come from the
+  /// cues kept with the file.
+  const playSaved = (copy: Saved) => {
+    const found = copy.item;
+    setItem(found);
+    void (async () => {
+      const native = await loadNative();
+      if (!native || !copy.path) return setError("This saved film can't be found on the tablet.");
+      const seconds = resume ? startPosition(copy, found.resumeSeconds) : 0;
+      const wanted = resolveChoice(copy.subs, chosen);
+      const first = wanted === undefined ? (copy.subs.find((track) => track.isDefault)?.index ?? null) : wanted;
+      live.current.sub = first;
+      setSub(first);
+      const made: Plan = {
+        url: native.localFileUrl(copy.path),
+        method: "DirectPlay",
+        local: true,
+        playSessionId: "",
+        source: { id: copy.sourceId ?? copy.id, directPlay: true, audio: [], subs: copy.subs, seconds: found.minutes ? found.minutes * 60 : undefined, container: copy.kind === "converted" ? "mp4 (converted)" : undefined },
+      };
+      setStart(seconds);
+      setActive(made);
+      setWaiting(true);
+      const after = found.type === "Episode" ? nextSaved(found) : undefined;
+      setNext(after?.item ?? null);
+    })();
+  };
 
   // Progress every 10 s while playing.
   useEffect(() => {
@@ -404,9 +449,11 @@ export function Player({ id, resume, subtitle: chosen, onClose, onNext }: Props)
     const user = current.value;
     const track = live.current.plan?.source.subs.find((entry) => entry.index === sub);
     setCues([]);
-    if (!user || !sourceId || !track?.text) return;
+    if (!sourceId || !track?.text) return;
     let gone = false;
-    subtitleCues(user, id, sourceId, track.index)
+    const local = live.current.plan?.local;
+    if (!local && !user) return;
+    (local ? savedCues(id, track.index).then((list) => list ?? Promise.reject(new Error("missing"))) : subtitleCues(user!, id, sourceId, track.index))
       .then((list) => {
         if (gone) return;
         setCues(list);
@@ -470,7 +517,12 @@ export function Player({ id, resume, subtitle: chosen, onClose, onNext }: Props)
   const onVideoError = async (fromHls = false) => {
     const user = current.value;
     const now = live.current.plan;
-    if (!user || !now || live.current.leaving) return;
+    if (!now || live.current.leaving) return;
+    if (now.local) {
+      setError("The tablet couldn't play this saved copy. Delete it from Downloads and save it again.");
+      return;
+    }
+    if (!user) return;
     // The tablet's own HLS player failed: try the same stream through hls.js before giving up.
     if (isAndroid && now.method === "Transcode" && !fromHls && !useHls) {
       setUseHls(true);

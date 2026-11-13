@@ -16,6 +16,9 @@ import { describeSeen, useMarks } from "../../letterboxd/marks";
 import { watchLog } from "../../letterboxd/store";
 import { isKidsShow, overrides, setKids } from "../kids/kids";
 import { useEnter } from "../shell/enter";
+import { discard, enqueue, enqueueMany, enqueueUnwatched, saved } from "../../downloads/store";
+import { sizeText } from "../../downloads/plan";
+import { isAndroid } from "../../platform/platform";
 import { openItem, play } from "../shell/route";
 
 type Mark = "played" | "favorite";
@@ -53,6 +56,13 @@ export function Detail({ id }: { id: string }) {
   });
   const [choice, setChoice] = useState<SubChoice | null>(() => loadChoice(id));
   const [picking, setPicking] = useState(false);
+  const [saving, setSaving] = useState<"menu" | "show" | null>(null);
+  const [saveNote, setSaveNote] = useState("");
+  useEffect(() => {
+    if (!saveNote) return;
+    const timer = setTimeout(() => setSaveNote(""), 6000);
+    return () => clearTimeout(timer);
+  }, [saveNote]);
 
   // Shown at once, then confirmed by the server (and put back if it refuses).
   const [local, setLocal] = useState<Partial<Record<Mark, boolean>>>({});
@@ -87,6 +97,29 @@ export function Detail({ id }: { id: string }) {
   };
 
   const playable = type === "Movie" || type === "Episode";
+  const copy = playable ? saved.value.find((entry) => entry.id === id) : undefined;
+  /// Saving to the tablet: a film or episode, or a show's episodes. Fails with a message to show.
+  const keep = async (job: () => Promise<unknown>) => {
+    setSaveNote("");
+    try {
+      await job();
+    } catch (failure) {
+      setSaveNote(failure instanceof Error ? failure.message : "Couldn't save this.");
+    }
+  };
+  const saveLabel = !copy
+    ? "Download"
+    : copy.state === "done"
+      ? "Downloaded"
+      : copy.state === "failed"
+        ? "Download failed"
+        : copy.state === "queued"
+          ? "Waiting to download"
+          : `Downloading ${Math.min(99, Math.round((copy.bytes / (copy.total || copy.estimate || 1)) * 100))}%`;
+  const onSave = () => {
+    if (!copy) void keep(() => enqueue(item));
+    else setSaving("menu");
+  };
   const watchable = playable || type === "Series";
   const seriesId = type === "Episode" ? item.seriesId : undefined;
   const open = (target: Item) => openItem(target);
@@ -133,6 +166,16 @@ export function Detail({ id }: { id: string }) {
           {hasSubs && (
             <Button icon="subtitles" on={!!choice} onPress={() => setPicking(true)}>
               {`Subtitles · ${describeChoice(tracks, choice)}`}
+            </Button>
+          )}
+          {isAndroid && playable && (
+            <Button icon={copy?.state === "done" ? "check" : "download-simple"} on={copy?.state === "done"} onPress={onSave}>
+              {saveLabel}
+            </Button>
+          )}
+          {isAndroid && type === "Series" && (
+            <Button icon="download-simple" onPress={() => setSaving("show")}>
+              Download
             </Button>
           )}
           {watchable && !(type === "Movie" && watchLog.value.length > 0) && (
@@ -186,6 +229,44 @@ export function Detail({ id }: { id: string }) {
         <ItemShelf title="More like this" items={alike.data} shape="poster" onOpen={open} />
       </div>
       {/* Outside the scrolling page, so moving through the drawer never scrolls what is under it. */}
+      {saveNote && (
+        <p class="offline mono" role="status">
+          {saveNote}
+        </p>
+      )}
+      {saving === "menu" && copy && (
+        <Menu
+          title={copy.state === "done" ? "Saved on this tablet" : "Download"}
+          options={[
+            { id: "remove", label: copy.state === "done" ? `Delete and free ${sizeText(copy.bytes)}` : "Cancel and remove" },
+            ...(copy.state === "failed" ? [{ id: "again", label: "Try again" }] : []),
+            { id: "keep", label: "Keep it" },
+          ]}
+          value="keep"
+          onPick={(option) => {
+            if (option === "remove") void discard(id);
+            if (option === "again") {
+              void discard(id).then(() => keep(() => enqueue(item)));
+            }
+          }}
+          onClose={() => setSaving(null)}
+        />
+      )}
+      {saving === "show" && (
+        <Menu
+          title="Download episodes"
+          options={[
+            ...(season && episodeList.data?.length ? [{ id: "season", label: `${season.name} (${episodeList.data.length} episodes)` }] : []),
+            { id: "unwatched", label: "All unwatched episodes" },
+          ]}
+          value=""
+          onPick={(option) => {
+            if (option === "season" && episodeList.data) void keep(() => enqueueMany(episodeList.data!));
+            if (option === "unwatched") void keep(() => enqueueUnwatched(id));
+          }}
+          onClose={() => setSaving(null)}
+        />
+      )}
       {picking && <Menu title="Subtitles" options={subOptions} value={subValue} onPick={pickSub} onClose={() => setPicking(false)} />}
     </>
   );

@@ -1,0 +1,33 @@
+/* The Downloads tab (tablet only): one row per saved or queued film. */
+.download {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: var(--space-sm) 0;
+  border-bottom: 1px solid var(--line);
+}
+.download-text {
+  display: flex;
+  flex: 1 1 240px;
+  flex-direction: column;
+  gap: var(--space-xxs);
+  min-width: 0;
+}
+.download-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.download-bar {
+  display: block;
+  height: var(--progress);
+  background: var(--tint-pressed);
+}
+.download-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--ink);
+  transform-origin: left;
+}

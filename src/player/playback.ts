@@ -41,6 +41,8 @@ export interface Source {
   video?: string;
   audioCodec?: string;
   bitrate?: number;
+  /// Size of the file on the server, in bytes.
+  size?: number;
 }
 
 export interface Plan {
@@ -50,6 +52,8 @@ export interface Plan {
   source: Source;
   playSessionId: string;
   audioIndex?: number;
+  /// Playing a copy saved on the tablet: nothing is asked of the server.
+  local?: boolean;
 }
 
 const safeId = (value: unknown): string | undefined =>
@@ -95,6 +99,7 @@ export function toSource(raw: unknown): Source | null {
     video,
     audioCodec,
     bitrate: count(value.Bitrate, 1, 1e10),
+    size: count(value.Size, 1, 1e13),
   };
 }
 

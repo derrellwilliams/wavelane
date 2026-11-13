@@ -122,6 +122,18 @@ public class WavelaneDownloads extends Plugin {
         }
     }
 
+    /** Keeps the screen on while a film plays (the player turns it off again when it pauses or closes). */
+    @PluginMethod
+    public void keepAwake(PluginCall call) {
+        final boolean on = Boolean.TRUE.equals(call.getBoolean("on"));
+        getActivity().runOnUiThread(() -> {
+            android.view.Window window = getActivity().getWindow();
+            if (on) window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            else window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            call.resolve();
+        });
+    }
+
     @PluginMethod
     public void remove(PluginCall call) {
         Long id = idOf(call);

@@ -9,6 +9,9 @@ import { Icon } from "../../design/components/Icon";
 import { Menu } from "../../design/components/Menu";
 import { focusIfUsable, onKey, pushScope } from "../../nav/focus";
 import { useBack } from "../../nav/hooks";
+import { keepAwake } from "../../platform/awake";
+import { input, isAndroid } from "../../platform/platform";
+import { attachHls, nativeHls } from "../../player/hls";
 import { plan, PlaybackError, reportProgress, subtitleCues, reportStart, reportStop, segments as fetchSegments, trickplay as fetchTrickplay, trickplayUrl, type Plan, type Report } from "../../player/playback";
 import { activeSegment, skipLabel, type Segment } from "../../player/segments";
 import { clock, scrubTarget } from "../../player/scrub";
@@ -41,6 +44,9 @@ const PROGRESS_MS = 10000;
 const DIM_AFTER_MS = 60000;
 const NEXT_WITHIN = 20;
 const LEAVE_WAIT_MS = 1500;
+
+const TAP_MS = 300;
+const TAP_SIDE = 0.35;
 
 const KEY = { left: 37, up: 38, right: 39, down: 40, ok: 13, play: 415, pause: 19, toggle: 10252, stop: 413, rewind: 412, forward: 417 };
 
@@ -82,6 +88,9 @@ export function Player({ id, resume, subtitle: chosen, onClose, onNext }: Props)
   const [cues, setCues] = useState<Cue[]>([]);
   const [offset, setOffset] = useState(() => readOffset(id));
   const [note, setNote] = useState("");
+  // The tablet plays converted streams through hls.js when its WebView can't play HLS itself, and
+  // falls back to it when the native player fails.
+  const [useHls, setUseHls] = useState(() => isAndroid && !nativeHls());
 
   // Latest values for handlers that outlive a render.
   const live = useRef({ time: 0, duration: 0, paused: false, osd: false, scrub: null as number | null, plan: null as Plan | null, leaving: false, next: null as Item | null, prompt: null as (() => void) | null, retried: false, sub: null as number | null });
@@ -96,6 +105,30 @@ export function Player({ id, resume, subtitle: chosen, onClose, onNext }: Props)
   live.current.next = skippedNext ? null : next;
 
   const autoplay = autoplayOn();
+
+  // The tablet's screen stays on while a film plays and may sleep again when it is paused or closed.
+  useEffect(() => {
+    keepAwake(!paused);
+    return () => keepAwake(false);
+  }, [paused]);
+
+  const viaHls = isAndroid && useHls && active?.method === "Transcode";
+  const streamUrl = active?.url;
+  useEffect(() => {
+    if (!viaHls || !streamUrl || leaving) return;
+    const element = video.current;
+    if (!element) return;
+    let gone = false;
+    let release = () => {};
+    void attachHls(element, streamUrl, start, () => !gone && void onVideoError(true)).then((stop) => {
+      if (gone) stop();
+      else release = stop;
+    });
+    return () => {
+      gone = true;
+      release();
+    };
+  }, [viaHls, streamUrl, leaving]);
 
   const report = useCallback((): Report | null => {
     const now = live.current;
@@ -434,16 +467,72 @@ export function Player({ id, resume, subtitle: chosen, onClose, onNext }: Props)
     flash("Downloaded. It can take a moment to show up in the list.");
   };
 
-  const onVideoError = async () => {
+  const onVideoError = async (fromHls = false) => {
     const user = current.value;
     const now = live.current.plan;
     if (!user || !now || live.current.leaving) return;
+    // The tablet's own HLS player failed: try the same stream through hls.js before giving up.
+    if (isAndroid && now.method === "Transcode" && !fromHls && !useHls) {
+      setUseHls(true);
+      return;
+    }
     if (now.method === "DirectPlay" && !live.current.retried) {
       live.current.retried = true;
       await begin(user, live.current.time, { audioIndex: now.audioIndex, subtitleIndex: live.current.sub ?? -1, transcode: true });
     } else {
-      setError("The TV couldn't play this. Try another version, or check the server's transcoding.");
+      setError(`The ${isAndroid ? "tablet" : "TV"} couldn't play this. Try another version, or check the server's transcoding.`);
     }
+  };
+
+  // Touch: a tap shows or hides the controls; a double tap on the left or right third seeks 10 s
+  // that way (more taps add more).
+  const taps = useRef({ at: 0, side: 0, timer: 0 });
+  useEffect(() => () => clearTimeout(taps.current.timer), []);
+  const onTap = (event: MouseEvent) => {
+    if (!input.touch || live.current.leaving) return;
+    if (event.target !== video.current && event.target !== root.current) return;
+    const box = root.current!.getBoundingClientRect();
+    const across = (event.clientX - box.left) / box.width;
+    const side = across < TAP_SIDE ? -1 : across > 1 - TAP_SIDE ? 1 : 0;
+    const last = taps.current;
+    const now = Date.now();
+    clearTimeout(last.timer);
+    if (side !== 0 && side === last.side && now - last.at < TAP_MS) {
+      scrubBy(side as -1 | 1, 0);
+      taps.current = { at: now, side, timer: 0 };
+      return;
+    }
+    taps.current = {
+      at: now,
+      side,
+      timer: window.setTimeout(() => {
+        if (live.current.osd && !live.current.paused) setOsd(false);
+        else wake();
+      }, TAP_MS),
+    };
+  };
+
+  // Dragging the bar (finger or pointer): the time follows the finger and the film seeks on release.
+  const dragging = useRef(false);
+  const dragTime = (event: PointerEvent) => {
+    const box = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    const total = live.current.duration || live.current.plan?.source.seconds || 0;
+    return Math.min(Math.max(0, total - 1), Math.max(0, ((event.clientX - box.left) / box.width) * total));
+  };
+  const dragMove = (event: PointerEvent) => {
+    if (!dragging.current) return;
+    live.current.scrub = dragTime(event);
+    setScrub(live.current.scrub);
+    wake();
+  };
+  const dragEnd = (event: PointerEvent, commit: boolean) => {
+    if (!dragging.current) return;
+    dragging.current = false;
+    const target = commit ? dragTime(event) : null;
+    live.current.scrub = null;
+    setScrub(null);
+    if (target !== null) seekTo(target);
+    wake();
   };
 
   const closeMenu = () => {
@@ -460,16 +549,16 @@ export function Player({ id, resume, subtitle: chosen, onClose, onNext }: Props)
   const title = item?.type === "Episode" ? (item.seriesName ?? item.name) : (item?.name ?? "");
   const subtitle = item?.type === "Episode" ? [episodeCode(item), item.name].filter(Boolean).join(" · ") : "";
   const audioTracks = active?.source.audio ?? [];
-  const info = active && [active.method === "DirectPlay" ? "Direct play" : "Transcoding", active.source.container, active.source.video, active.source.audioCodec, active.source.bitrate ? `${(active.source.bitrate / 1e6).toFixed(1)} Mbps` : ""].filter(Boolean);
+  const info = active && [active.method === "DirectPlay" ? "Direct play" : "Transcoding", isAndroid && active.method === "Transcode" ? (viaHls ? "hls.js" : "native HLS") : "", active.source.container, active.source.video, active.source.audioCodec, active.source.bitrate ? `${(active.source.bitrate / 1e6).toFixed(1)} Mbps` : ""].filter(Boolean);
 
   return (
-    <div ref={root} class={`player${osd || paused ? " has-osd" : ""}${dim ? " is-dim" : ""}`} onMouseMove={() => !leaving && !live.current.osd && wake()}>
+    <div ref={root} class={`player${osd || paused ? " has-osd" : ""}${dim ? " is-dim" : ""}`} onMouseMove={input.dpad ? () => !leaving && !live.current.osd && wake() : undefined} onClick={onTap}>
       {active && !leaving && (
         <video
-          key={active.url}
+          key={`${active.url}${viaHls}`}
           ref={video}
           class="player-video"
-          src={active.url}
+          src={viaHls ? undefined : active.url}
           autoPlay
           playsInline
           onLoadedMetadata={(event) => {
@@ -487,7 +576,7 @@ export function Player({ id, resume, subtitle: chosen, onClose, onNext }: Props)
             progress();
           }}
           onSeeked={() => progress()}
-          onError={() => void onVideoError()}
+          onError={() => void onVideoError(viaHls)}
           onEnded={() => {
             if (live.current.next && autoplay) playNext(live.current.next);
             else close();
@@ -498,23 +587,48 @@ export function Player({ id, resume, subtitle: chosen, onClose, onNext }: Props)
       {(waiting || note) && !error && <div class="player-wait mono secondary">{note || "Loading"}</div>}
 
       <div class="player-top" hidden={!(osd || paused) || !!error}>
+        {input.touch && (
+          <div class="row" data-focus-group>
+            <Button icon="arrow-left" onPress={close}>
+              Back
+            </Button>
+          </div>
+        )}
         <h1 class="section">{title}</h1>
         {subtitle && <p class="secondary">{subtitle}</p>}
         {stats && info && <p class="mono secondary">{info.join("  ·  ")}</p>}
       </div>
 
-      <div class="player-bottom" hidden={!(osd || paused) || !!error}>
-        <div class="row player-buttons" data-focus-group>
-          <button class="button" type="button" data-focusable data-play tabIndex={-1} onClick={toggle}>
-            <Icon name={paused ? "play" : "pause"} />
-            {paused ? "Play" : "Pause"}
-          </button>
+      {input.touch && (
+        <div class="player-center" hidden={!(osd || paused) || !!error}>
           <Button icon="arrow-counter-clockwise" onPress={() => scrubBy(-1, 0)}>
             10 s
           </Button>
+          <button class="button player-toggle" type="button" aria-label={paused ? "Play" : "Pause"} onClick={toggle}>
+            <Icon name={paused ? "play" : "pause"} />
+          </button>
           <Button icon="arrow-clockwise" onPress={() => scrubBy(1, 0)}>
             10 s
           </Button>
+        </div>
+      )}
+
+      <div class="player-bottom" hidden={!(osd || paused) || !!error}>
+        <div class="row player-buttons" data-focus-group>
+          {input.dpad && (
+            <>
+              <button class="button" type="button" data-focusable data-play tabIndex={-1} onClick={toggle}>
+                <Icon name={paused ? "play" : "pause"} />
+                {paused ? "Play" : "Pause"}
+              </button>
+              <Button icon="arrow-counter-clockwise" onPress={() => scrubBy(-1, 0)}>
+                10 s
+              </Button>
+              <Button icon="arrow-clockwise" onPress={() => scrubBy(1, 0)}>
+                10 s
+              </Button>
+            </>
+          )}
           {audioTracks.length > 1 && (
             <Button icon="speaker-high" onPress={() => setMenu("audio")}>
               Audio
@@ -535,10 +649,22 @@ export function Player({ id, resume, subtitle: chosen, onClose, onNext }: Props)
             </Button>
           )}
         </div>
-        <div class="seek" data-focusable data-seekbar tabIndex={-1} onClick={(event) => {
-          const box = event.currentTarget.getBoundingClientRect();
-          if (total) seekTo(((event.clientX - box.left) / box.width) * total);
-        }}>
+        <div
+          class="seek"
+          data-focusable
+          data-seekbar
+          tabIndex={-1}
+          onPointerDown={(event) => {
+            if (!total) return;
+            dragging.current = true;
+            event.currentTarget.setPointerCapture(event.pointerId);
+            clearTimeout(scrubTimer.current);
+            dragMove(event);
+          }}
+          onPointerMove={dragMove}
+          onPointerUp={(event) => dragEnd(event, true)}
+          onPointerCancel={(event) => dragEnd(event, false)}
+        >
           {thumb && thumbSrc && trick && (
             <div class="seek-thumb" style={{ left: `${fraction * 100}%` }}>
               <div class="seek-picture" style={{ width: `${trick.width}px`, height: `${trick.height}px`, backgroundImage: `url("${thumbSrc}")`, backgroundPosition: `-${thumb.x}px -${thumb.y}px` }} />

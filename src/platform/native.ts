@@ -11,6 +11,7 @@ export interface DownloadsPlugin {
   enqueue(options: { url: string; authorization: string; name: string }): Promise<{ id: number }>;
   status(options: { id: number }): Promise<{ state: string; bytes: number; total: number; reason: number }>;
   remove(options: { id: number }): Promise<void>;
+  keepAwake(options: { on: boolean }): Promise<void>;
 }
 
 export const Downloads = registerPlugin<DownloadsPlugin>("WavelaneDownloads");

@@ -44,6 +44,39 @@ describe("deviceProfile", () => {
   });
 });
 
+describe("deviceProfile for the Fire tablet", () => {
+  const tablet = deviceProfile(120_000_000, "android");
+
+  it("direct plays only H.264 with audio the WebView decodes", () => {
+    const direct = tablet.DirectPlayProfiles![0]!;
+    expect(direct.VideoCodec).toBe("h264");
+    expect(direct.Container).toContain("mkv");
+    expect(direct.AudioCodec).not.toMatch(/ac3|dts/);
+    expect(direct.AudioCodec).toContain("aac");
+  });
+
+  it("caps the bitrate at 20 Mbps whatever the setting says", () => {
+    expect(tablet.MaxStreamingBitrate).toBe(20_000_000);
+    expect(deviceProfile(4_000_000, "android").MaxStreamingBitrate).toBe(4_000_000);
+  });
+
+  it("makes the server convert anything above 1080p, 8-bit or SDR", () => {
+    const rules = tablet.CodecProfiles!.flatMap((entry) => entry.Conditions ?? []);
+    const find = (property: string) => rules.find((rule) => rule.Property === property);
+    expect(find("Height")).toMatchObject({ Value: "1080", IsRequired: true });
+    expect(find("VideoBitDepth")).toMatchObject({ Value: "8", IsRequired: true });
+    expect(find("VideoRangeType")).toMatchObject({ Value: "SDR", IsRequired: true });
+  });
+
+  it("converts to HLS with H.264 and stereo AAC", () => {
+    expect(tablet.TranscodingProfiles![0]).toMatchObject({ Protocol: "hls", VideoCodec: "h264", AudioCodec: "aac", MaxAudioChannels: "2" });
+  });
+
+  it("leaves the TV profile as it was", () => {
+    expect(deviceProfile(undefined, "webos").Name).toBe("Wavelane LG webOS");
+  });
+});
+
 describe("addresses with the token", () => {
   it("adds the token once, only to paths on the server", () => {
     expect(withToken("http://nas:8096", "/Videos/x/stream?static=true", "t k")).toBe("http://nas:8096/Videos/x/stream?static=true&api_key=t%20k");

@@ -31,7 +31,7 @@ import java.util.regex.Pattern;
 public class WavetileTvDownloads extends Plugin {
     private static final Pattern LETTERBOXD_PATH = Pattern.compile("^/[A-Za-z0-9_/]{1,80}$");
     private static final Pattern LETTERBOXD_REDIRECT = Pattern.compile("^(?:https://letterboxd\\.com(/[^\\s]*)|(/[^\\s]*))$");
-    private static final Pattern NAME = Pattern.compile("^[A-Za-z0-9._-]{1,100}$");
+    private static final Pattern NAME = Pattern.compile("^[A-Za-z0-9_-][A-Za-z0-9._-]{0,99}$"); // no leading dot, so never "." or ".."
 
     private DownloadManager manager() {
         return (DownloadManager) getContext().getSystemService(Context.DOWNLOAD_SERVICE);

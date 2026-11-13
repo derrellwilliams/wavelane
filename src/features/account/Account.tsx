@@ -1,4 +1,6 @@
-import { useCallback, useRef, useState } from "preact/hooks";
+import { useCallback, useEffect, useRef, useState } from "preact/hooks";
+import { loadNative } from "../../platform/native-load";
+import { isAndroid } from "../../platform/platform";
 import { versionAtLeast, type Session } from "../../api/auth";
 import { Button } from "../../design/components/Button";
 import { Icon } from "../../design/components/Icon";
@@ -27,6 +29,16 @@ export function Account({ session, onSetupCheck, onSignOut }: Props) {
   const [choosing, setChoosing] = useState(false);
   const closeChoosing = useCallback(() => setChoosing(false), []);
   useEnter(screen, !styling && !lists);
+  // The tablet: is Wavelane the home screen (device owner)? The button below hands it back.
+  const [owner, setOwner] = useState(false);
+  useEffect(() => {
+    if (isAndroid) void loadNative().then((native) => native?.homeOwned()).then((value) => setOwner(!!value));
+  }, []);
+  const giveBackHome = async () => {
+    const native = await loadNative();
+    await native?.Downloads.releaseHome().catch(() => undefined);
+    setOwner(false);
+  };
 
   const missing = !versionAtLeast(session.serverVersion, 10, 9)
     ? "Scrub thumbnails need Jellyfin 10.9 and Skip Intro needs 10.10."
@@ -78,6 +90,11 @@ export function Account({ session, onSetupCheck, onSignOut }: Props) {
         <Button icon="wrench" onPress={onSetupCheck}>
           Setup check
         </Button>
+        {isAndroid && owner && (
+          <Button icon="house" onPress={() => void giveBackHome()}>
+            Give Home back to Fire
+          </Button>
+        )}
         <Button icon="subtitles" onPress={() => setStyling(true)}>
           Subtitle appearance
         </Button>

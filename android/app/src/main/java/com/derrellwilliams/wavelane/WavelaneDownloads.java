@@ -202,6 +202,47 @@ public class WavelaneDownloads extends Plugin {
         }
     }
 
+    private android.app.admin.DevicePolicyManager policy() {
+        return (android.app.admin.DevicePolicyManager) getContext().getSystemService(Context.DEVICE_POLICY_SERVICE);
+    }
+
+    private boolean isOwner() {
+        return policy().isDeviceOwnerApp(getContext().getPackageName());
+    }
+
+    /**
+     * Makes Wavelane the home screen when the app is the device owner (set once with
+     * "dpm set-device-owner"). Safe to call every launch. Reports whether it is the owner and so
+     * whether Home now opens Wavelane.
+     */
+    @PluginMethod
+    public void claimHome(PluginCall call) {
+        boolean owner = isOwner();
+        if (owner) {
+            android.content.ComponentName admin = new android.content.ComponentName(getContext(), WavelaneAdmin.class);
+            android.content.IntentFilter filter = new android.content.IntentFilter(android.content.Intent.ACTION_MAIN);
+            filter.addCategory(android.content.Intent.CATEGORY_HOME);
+            filter.addCategory(android.content.Intent.CATEGORY_DEFAULT);
+            policy().addPersistentPreferredActivity(admin, filter, new android.content.ComponentName(getContext(), MainActivity.class));
+        }
+        JSObject result = new JSObject();
+        result.put("owner", owner);
+        call.resolve(result);
+    }
+
+    /** Gives the home screen back to the Fire launcher and drops the device owner role. */
+    @PluginMethod
+    public void releaseHome(PluginCall call) {
+        if (isOwner()) {
+            android.content.ComponentName admin = new android.content.ComponentName(getContext(), WavelaneAdmin.class);
+            policy().clearPackagePersistentPreferredActivities(admin, getContext().getPackageName());
+            policy().clearDeviceOwnerApp(getContext().getPackageName());
+        }
+        JSObject result = new JSObject();
+        result.put("owner", false);
+        call.resolve(result);
+    }
+
     @PluginMethod
     public void remove(PluginCall call) {
         Long id = idOf(call);

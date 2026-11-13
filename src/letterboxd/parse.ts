@@ -1,4 +1,4 @@
-/// Reads what Wavelane needs out of Letterboxd pages on the tablet (the TV's service has its own
+/// Reads what Wavetile TV needs out of Letterboxd pages on the tablet (the TV's service has its own
 /// copy in `service/parse.js`). Page text is untrusted: every number is range-checked and nothing
 /// else is kept.
 import type { Entry } from "./feed";

@@ -73,7 +73,7 @@ describe("deviceProfile for the Fire tablet", () => {
   });
 
   it("leaves the TV profile as it was", () => {
-    expect(deviceProfile(undefined, "webos").Name).toBe("Wavelane LG webOS");
+    expect(deviceProfile(undefined, "webos").Name).toBe("Wavetile TV LG webOS");
   });
 });
 
@@ -183,7 +183,7 @@ describe("plan and reports", () => {
     const body = JSON.parse(calls[0]!.init.body as string);
     expect(calls[0]!.url).toBe(`http://nas:8096/Items/${ITEM}/PlaybackInfo?userId=${SESSION.userId}`);
     expect(body).toMatchObject({ StartTimeTicks: 900_000_000, AudioStreamIndex: 2, EnableDirectPlay: false, EnableTranscoding: true });
-    expect(body.DeviceProfile.Name).toBe("Wavelane LG webOS");
+    expect(body.DeviceProfile.Name).toBe("Wavetile TV LG webOS");
     expect(calls[0]!.url).not.toContain("tok123");
   });
 

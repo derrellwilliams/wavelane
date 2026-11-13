@@ -27,7 +27,7 @@ export const TABLET_MAX_BITRATE = 20_000_000;
 function tabletProfile(maxBitrate: number): DeviceProfile {
   const limit = Math.min(maxBitrate, TABLET_MAX_BITRATE);
   return {
-    Name: "Wavelane Fire HD 8",
+    Name: "Wavetile TV Fire HD 8",
     MaxStreamingBitrate: limit,
     MaxStaticBitrate: limit,
     MusicStreamingTranscodingBitrate: 192_000,
@@ -78,7 +78,7 @@ function tabletProfile(maxBitrate: number): DeviceProfile {
 export function deviceProfile(maxBitrate = DEFAULT_MAX_BITRATE, platform: Platform = PLATFORM): DeviceProfile {
   if (platform === "android") return tabletProfile(maxBitrate);
   return {
-    Name: "Wavelane LG webOS",
+    Name: "Wavetile TV LG webOS",
     MaxStreamingBitrate: maxBitrate,
     MaxStaticBitrate: maxBitrate,
     MusicStreamingTranscodingBitrate: 192_000,

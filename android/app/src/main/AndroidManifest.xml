@@ -24,7 +24,7 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- Lets Wavelane be chosen as the tablet's home screen (the Fire launcher is switched off after). -->
+            <!-- Lets Wavetile TV be chosen as the tablet's home screen (the Fire launcher is switched off after). -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.HOME" />
@@ -34,7 +34,7 @@
         </activity>
 
         <receiver
-            android:name=".WavelaneAdmin"
+            android:name=".WavetileTvAdmin"
             android:exported="true"
             android:permission="android.permission.BIND_DEVICE_ADMIN">
             <meta-data

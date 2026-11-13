@@ -76,7 +76,7 @@ export async function androidChecks(run: RunCheck): Promise<void> {
   });
 }
 
-const TEST_NAME = "wavelane-spike.bin";
+const TEST_NAME = "wavetiletv-spike.bin";
 
 function once(target: EventTarget, event: string, ms: number): Promise<void> {
   return new Promise((resolve, reject) => {

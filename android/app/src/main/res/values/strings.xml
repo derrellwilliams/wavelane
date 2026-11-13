@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Wavelane</string>
-    <string name="title_activity_main">Wavelane</string>
-    <string name="package_name">com.derrellwilliams.wavelane</string>
-    <string name="custom_url_scheme">com.derrellwilliams.wavelane</string>
+    <string name="app_name">Wavetile TV</string>
+    <string name="title_activity_main">Wavetile TV</string>
+    <string name="package_name">com.derrellwilliams.wavetiletv</string>
+    <string name="custom_url_scheme">com.derrellwilliams.wavetiletv</string>
 </resources>

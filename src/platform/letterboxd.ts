@@ -1,5 +1,5 @@
 /// Letterboxd reads that a web page can't make (no CORS headers). On the TV its service makes
-/// them; on the tablet Wavelane's own native plugin does, to letterboxd.com only. Both give the
+/// them; on the tablet Wavetile TV's own native plugin does, to letterboxd.com only. Both give the
 /// same answers, so the average and feed code doesn't know which one ran.
 import { parseFeed, parseFilmRating } from "../letterboxd/parse";
 import type { Entry } from "../letterboxd/feed";

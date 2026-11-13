@@ -1,7 +1,7 @@
 /// Calls into the app's own JS service on the TV (`service/`), which does what a web page can't:
 /// requests to hosts that send no CORS headers. Off the TV (desktop browser) every call rejects.
 
-const SERVICE = "luna://com.derrellwilliams.wavelane.service/";
+const SERVICE = "luna://com.derrellwilliams.wavetiletv.service/";
 
 interface Bridge {
   onservicecallback: ((message: string) => void) | null;

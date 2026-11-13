@@ -33,7 +33,7 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe("authHeader", () => {
   it("names the client and only adds a token when there is one", () => {
-    expect(authHeader("abc123")).toBe('MediaBrowser Client="Wavelane", Device="LG TV", DeviceId="abc123", Version="0.1.0"');
+    expect(authHeader("abc123")).toBe('MediaBrowser Client="Wavetile TV", Device="LG TV", DeviceId="abc123", Version="0.1.0"');
     expect(authHeader("abc123", "tok")).toContain(', Token="tok"');
   });
 });

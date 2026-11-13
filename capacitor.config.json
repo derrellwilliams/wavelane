@@ -1,6 +1,6 @@
 {
-  "appId": "com.derrellwilliams.wavelane",
-  "appName": "Wavelane",
+  "appId": "com.derrellwilliams.wavetiletv",
+  "appName": "Wavetile TV",
   "backgroundColor": "#1a1a1a",
   "webDir": "dist-android",
   "server": {

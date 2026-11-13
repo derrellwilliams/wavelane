@@ -1,10 +1,10 @@
 {
-  "id": "com.derrellwilliams.wavelane",
+  "id": "com.derrellwilliams.wavetiletv",
   "version": "0.1.0",
   "vendor": "Derrell Williams",
   "type": "web",
   "main": "index.html",
-  "title": "Wavelane",
+  "title": "Wavetile TV",
   "icon": "icon.png",
   "largeIcon": "largeIcon.png",
   "bgColor": "#1A1A1A",

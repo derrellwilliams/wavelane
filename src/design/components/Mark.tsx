@@ -1,4 +1,4 @@
-/// The wave mark (placeholder until the Wavelane logo is signed off).
+/// The wave mark (placeholder until the Wavetile TV logo is signed off).
 export function Mark() {
   return (
     <svg class="mark" viewBox="0 0 92 16" aria-hidden="true">

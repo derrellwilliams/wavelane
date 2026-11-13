@@ -1,6 +1,8 @@
-// Draws the launcher icons (webos/icon.png 80×80, webos/largeIcon.png 130×130): the family's wave
-// in tan on the near-black canvas, drawn like Wavetile's app icon. Placeholder until Wavelane has its own mark.
+// Draws every launcher icon: the cube from Wavetile (WavetileMark.swift), in tan on the near-black
+// canvas, at its resting pose (edges to the top middle, right middle and bottom-left corner).
 // Run: npm run icons
+//   webos/icon.png 80×80 and webos/largeIcon.png 130×130
+//   android mipmap-*/ic_launcher.png (square), ic_launcher_round.png, ic_launcher_foreground.png (adaptive layer)
 import { deflateSync, crc32 } from "node:zlib";
 import { writeFileSync } from "node:fs";
 
@@ -16,60 +18,83 @@ function chunk(type, data) {
   return out;
 }
 
-// The wave mark's own curve (the path in src/design/components/Mark.tsx and Wavetile's icon), as
-// cubic segments on a 90 × 16 box, sampled into points once.
-const CURVE = [
-  [1, 7.9, 6, -1.3, 11, -1.3, 16, 7.9],
-  [16, 7.9, 20.5, 15.3, 25.5, 15.3, 31, 7.9],
-  [31, 7.9, 36, 0.5, 41, 0.5, 46, 7.9],
-  [46, 7.9, 51.3, 16.1, 56.3, 16.1, 61, 7.9],
-  [61, 7.9, 66, -0.3, 71, -0.3, 76, 7.9],
-  [76, 7.9, 80.6, 14.9, 85.6, 14.9, 91, 7.9],
+// The mark on Wavetile's 100-unit grid (WavetileMark.draw): a rounded frame 10 to 90 with radius 8,
+// three butt-capped edges from the center (50, 50), and a hub dot as wide as the line.
+const FRAME_HALF = 40;
+const FRAME_RADIUS = 8;
+const CENTER = 50;
+const ENDS = [
+  [50, 12], // top middle
+  [88, 50], // right middle
+  [12, 88], // bottom-left corner
 ];
-const STEPS = 400;
-const POINTS = CURVE.flatMap(([x0, y0, x1, y1, x2, y2, x3, y3]) =>
-  Array.from({ length: STEPS }, (_, i) => {
-    const t = i / STEPS;
-    const u = 1 - t;
-    return [
-      u ** 3 * x0 + 3 * u * u * t * x1 + 3 * u * t * t * x2 + t ** 3 * x3,
-      u ** 3 * y0 + 3 * u * u * t * y1 + 3 * u * t * t * y2 + t ** 3 * y3,
-    ];
-  }),
-);
-POINTS.push([91, 7.9]);
 
-// Same proportions as Wavetile's app icon: the wave fills 76% of the width and the line is
-// about 1.8% of the icon (a thin line, not the favicon's heavy one).
-const WIDTH = 0.76;
-const STROKE = 0.0176;
+// Same weight as the app: Wavetile draws the line at 2.25 pt however big the mark is, which on its
+// 96 pt splash is 2.34 grid units. The mark's box is 75% of the icon, so the line is 1.76% of the
+// icon, the weight the old wave icon had.
+const BOX = 0.75;
+const LINE = 2.25 / 0.96; // grid units
 
-function png(size) {
-  const scale = (size * WIDTH) / 90;
-  const left = (size - 90 * scale) / 2 - 1 * scale;
-  const top = size / 2 - 7.9 * scale;
-  const dots = POINTS.map(([x, y]) => [left + x * scale, top + y * scale]);
-  const half = size * STROKE * 0.5;
-  const rows = Buffer.alloc(size * (size * 3 + 1));
+// Signed distance (negative inside) from a point to the cube's ink, in grid units.
+function sd(px, py) {
+  const half = LINE / 2;
+  // Frame: the outline of a rounded square, stroked on its path.
+  const qx = Math.abs(px - CENTER) - (FRAME_HALF - FRAME_RADIUS);
+  const qy = Math.abs(py - CENTER) - (FRAME_HALF - FRAME_RADIUS);
+  const box = Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - FRAME_RADIUS;
+  let best = Math.abs(box) - half;
+  // Hub dot.
+  best = Math.min(best, Math.hypot(px - CENTER, py - CENTER) - half);
+  // Edges: rectangles with square ends.
+  for (const [ex, ey] of ENDS) {
+    const dx = ex - CENTER;
+    const dy = ey - CENTER;
+    const len = Math.hypot(dx, dy);
+    const ux = dx / len;
+    const uy = dy / len;
+    const rx = px - (CENTER + dx / 2);
+    const ry = py - (CENTER + dy / 2);
+    const along = Math.abs(rx * ux + ry * uy) - len / 2;
+    const across = Math.abs(-rx * uy + ry * ux) - half;
+    const d = Math.hypot(Math.max(along, 0), Math.max(across, 0)) + Math.min(Math.max(along, across), 0);
+    best = Math.min(best, d);
+  }
+  return best;
+}
+
+/**
+ * RGBA PNG. `shape` is "square" (ink fills the canvas), "round" (ink in a circle, clear outside) or
+ * "layer" (cube only, clear background, for an adaptive icon: the visible window is 72 of 108 dp).
+ */
+function png(size, shape = "square") {
+  const visible = shape === "layer" ? (size * 72) / 108 : size;
+  const scale = (visible * BOX) / 100; // pixels per grid unit
+  const origin = (size - 100 * scale) / 2;
+  const rows = Buffer.alloc(size * (size * 4 + 1));
   for (let y = 0; y < size; y++) {
-    const row = y * (size * 3 + 1);
+    const row = y * (size * 4 + 1);
     for (let x = 0; x < size; x++) {
-      // Distance to the nearest point of the curve (round caps for free).
-      let nearest = Infinity;
-      for (const [cx, cy] of dots) {
-        const d = Math.hypot(x + 0.5 - cx, y + 0.5 - cy);
-        if (d < nearest) nearest = d;
+      const gx = (x + 0.5 - origin) / scale;
+      const gy = (y + 0.5 - origin) / scale;
+      const cover = Math.max(0, Math.min(1, 0.5 - sd(gx, gy) * scale));
+      let alpha = 255;
+      let ink = cover;
+      if (shape === "round") {
+        const r = size / 2;
+        alpha = Math.round(255 * Math.max(0, Math.min(1, r - Math.hypot(x + 0.5 - r, y + 0.5 - r) + 0.5)));
+      } else if (shape === "layer") {
+        alpha = Math.round(255 * cover);
+        ink = 1;
       }
-      const cover = Math.max(0, Math.min(1, half - nearest + 0.5));
-      for (let c = 0; c < 3; c++) {
-        rows[row + 1 + x * 3 + c] = Math.round(INK[c] + (TAN[c] - INK[c]) * cover);
-      }
+      const at = row + 1 + x * 4;
+      for (let c = 0; c < 3; c++) rows[at + c] = Math.round(INK[c] + (TAN[c] - INK[c]) * ink);
+      rows[at + 3] = alpha;
     }
   }
   const header = Buffer.alloc(13);
   header.writeUInt32BE(size, 0);
   header.writeUInt32BE(size, 4);
-  header.set([8, 2, 0, 0, 0], 8); // 8-bit RGB
+  header.set([8, 6, 0, 0, 0], 8); // 8-bit RGBA
   return Buffer.concat([
     Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
     chunk("IHDR", header),
@@ -78,7 +103,16 @@ function png(size) {
   ]);
 }
 
-const dir = new URL("../webos/", import.meta.url);
-writeFileSync(new URL("icon.png", dir), png(80));
-writeFileSync(new URL("largeIcon.png", dir), png(130));
-console.log("wrote webos/icon.png and webos/largeIcon.png");
+const webos = new URL("../webos/", import.meta.url);
+writeFileSync(new URL("icon.png", webos), png(80));
+writeFileSync(new URL("largeIcon.png", webos), png(130));
+
+// Android: launcher icon 48 dp, adaptive layer 108 dp, at each density.
+const DENSITIES = { mdpi: 1, hdpi: 1.5, xhdpi: 2, xxhdpi: 3, xxxhdpi: 4 };
+for (const [name, k] of Object.entries(DENSITIES)) {
+  const dir = new URL(`../android/app/src/main/res/mipmap-${name}/`, import.meta.url);
+  writeFileSync(new URL("ic_launcher.png", dir), png(48 * k, "square"));
+  writeFileSync(new URL("ic_launcher_round.png", dir), png(48 * k, "round"));
+  writeFileSync(new URL("ic_launcher_foreground.png", dir), png(108 * k, "layer"));
+}
+console.log("wrote webos icons and android mipmaps");

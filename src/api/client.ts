@@ -1,7 +1,7 @@
 /// The one place the app talks to a Jellyfin server. Thin on purpose: JSON in, JSON out, a time
 /// limit, and errors that never carry the token, a query string or a request body.
 
-const CLIENT = "Wavelane";
+const CLIENT = "Wavetile TV";
 const DEVICE = "LG TV";
 export const APP_VERSION = "0.1.0";
 

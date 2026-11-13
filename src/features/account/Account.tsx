@@ -40,7 +40,7 @@ export function Account({ session, onSetupCheck, onSignOut }: Props) {
   const [choosing, setChoosing] = useState(false);
   const closeChoosing = useCallback(() => setChoosing(false), []);
   useEnter(screen, !styling && !lists);
-  // The tablet: is Wavelane the home screen (device owner)? The button below hands it back.
+  // The tablet: is Wavetile TV the home screen (device owner)? The button below hands it back.
   const [owner, setOwner] = useState(false);
   useEffect(() => {
     if (isAndroid) void refreshSpace();
@@ -147,7 +147,7 @@ export function Account({ session, onSetupCheck, onSignOut }: Props) {
         </Button>
       </div>
       <p class="mono secondary about">
-        Wavelane 0.1.0 · Installed apps stop opening when Developer Mode lapses:
+        Wavetile TV 0.1.0 · Installed apps stop opening when Developer Mode lapses:
         press Extend in the Developer Mode app on the TV about every 1000 hours.
       </p>
       {choosing && (

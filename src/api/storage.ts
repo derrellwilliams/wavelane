@@ -1,7 +1,7 @@
 /// App-private storage (localStorage, which on webOS belongs to this app alone). Every call is
 /// guarded: storage can be unavailable or full, and the app must still run.
 
-const PREFIX = "wavelane.";
+const PREFIX = "wavetiletv.";
 
 export function load(key: string): string | null {
   try {

@@ -1,4 +1,4 @@
-package com.derrellwilliams.wavelane;
+package com.derrellwilliams.wavetiletv;
 
 import android.app.DownloadManager;
 import android.content.Context;
@@ -27,8 +27,8 @@ import java.util.regex.Pattern;
  * permission; uninstalling deletes them). The token is passed as a request header only and is
  * never logged or put in the URL or the file name.
  */
-@CapacitorPlugin(name = "WavelaneDownloads")
-public class WavelaneDownloads extends Plugin {
+@CapacitorPlugin(name = "WavetileTvDownloads")
+public class WavetileTvDownloads extends Plugin {
     private static final Pattern LETTERBOXD_PATH = Pattern.compile("^/[A-Za-z0-9_/]{1,80}$");
     private static final Pattern LETTERBOXD_REDIRECT = Pattern.compile("^(?:https://letterboxd\\.com(/[^\\s]*)|(/[^\\s]*))$");
     private static final Pattern NAME = Pattern.compile("^[A-Za-z0-9._-]{1,100}$");
@@ -91,7 +91,7 @@ public class WavelaneDownloads extends Plugin {
         DownloadManager.Request request = new DownloadManager.Request(uri);
         request.addRequestHeader("Authorization", authorization);
         request.setDestinationInExternalFilesDir(getContext(), Environment.DIRECTORY_MOVIES, name);
-        request.setTitle("Wavelane");
+        request.setTitle("Wavetile TV");
         request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE);
         request.setAllowedOverRoaming(false);
         try {
@@ -159,7 +159,7 @@ public class WavelaneDownloads extends Plugin {
                 connection.setInstanceFollowRedirects(false);
                 connection.setConnectTimeout(12000);
                 connection.setReadTimeout(12000);
-                connection.setRequestProperty("User-Agent", "Wavelane/0.1 (Android tablet app)");
+                connection.setRequestProperty("User-Agent", "WavetileTV/0.1 (Android tablet app)");
                 connection.setRequestProperty("Accept", "text/html,application/rss+xml");
                 int status = connection.getResponseCode();
                 String location = connection.getHeaderField("Location");
@@ -211,15 +211,15 @@ public class WavelaneDownloads extends Plugin {
     }
 
     /**
-     * Makes Wavelane the home screen when the app is the device owner (set once with
+     * Makes Wavetile TV the home screen when the app is the device owner (set once with
      * "dpm set-device-owner"). Safe to call every launch. Reports whether it is the owner and so
-     * whether Home now opens Wavelane.
+     * whether Home now opens Wavetile TV.
      */
     @PluginMethod
     public void claimHome(PluginCall call) {
         boolean owner = isOwner();
         if (owner) {
-            android.content.ComponentName admin = new android.content.ComponentName(getContext(), WavelaneAdmin.class);
+            android.content.ComponentName admin = new android.content.ComponentName(getContext(), WavetileTvAdmin.class);
             android.content.IntentFilter filter = new android.content.IntentFilter(android.content.Intent.ACTION_MAIN);
             filter.addCategory(android.content.Intent.CATEGORY_HOME);
             filter.addCategory(android.content.Intent.CATEGORY_DEFAULT);
@@ -234,7 +234,7 @@ public class WavelaneDownloads extends Plugin {
     @PluginMethod
     public void releaseHome(PluginCall call) {
         if (isOwner()) {
-            android.content.ComponentName admin = new android.content.ComponentName(getContext(), WavelaneAdmin.class);
+            android.content.ComponentName admin = new android.content.ComponentName(getContext(), WavetileTvAdmin.class);
             policy().clearPackagePersistentPreferredActivities(admin, getContext().getPackageName());
             policy().clearDeviceOwnerApp(getContext().getPackageName());
         }

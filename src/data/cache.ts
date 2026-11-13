@@ -2,7 +2,7 @@
 /// frame from the last visit before the server answers. Every call is guarded: with no database
 /// the app simply has no cache. It holds library lists only, never the token.
 
-const NAME = "wavelane";
+const NAME = "wavetiletv";
 const STORE = "cache";
 const KEEP_MS = 30 * 24 * 60 * 60 * 1000;
 

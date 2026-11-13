@@ -1,17 +1,18 @@
 import { useState } from "preact/hooks";
 import type { Item } from "../../api/items";
-import { clearProgress, item as fetchItem, setFavorite } from "../../api/library";
+import { clearProgress, item as fetchItem, setFavorite, setPlayed } from "../../api/library";
 import { session } from "../../api/session";
 import { Menu, type Option } from "../../design/components/Menu";
 import { refreshAll, useResource } from "../../data/resource";
 import { dismiss, undismiss } from "./dismissed";
 
-async function removeFromContinue(item: Item): Promise<void> {
+async function removeFromContinue(item: Item, played = false): Promise<void> {
   const current = session.value;
   if (!current) return;
   dismiss(item.id);
   try {
-    await clearProgress(current, item.id);
+    if (played) await setPlayed(current, item.id, true);
+    else await clearProgress(current, item.id);
     refreshAll();
   } catch {
     undismiss(item.id);
@@ -30,8 +31,8 @@ async function toggleFavorite(id: string, on: boolean): Promise<void> {
 }
 
 /// Hold OK on a card or the spotlight: `ask(item)` opens a drawer to add or remove it from
-/// Favorites, and, for something in Continue Watching (`ask(item, true)`), to take it off that
-/// list (which forgets where you were, not that you watched it). An episode's favorite is its
+/// Favorites or mark a movie/episode played. Something in Continue Watching (`ask(item, true)`)
+/// can also be removed without marking it watched. An episode's favorite is its
 /// show. Render `menu` outside any scrolling container.
 export function useItemMenu() {
   const [asking, setAsking] = useState<{ item: Item; continuing: boolean } | null>(null);
@@ -48,6 +49,7 @@ export function useItemMenu() {
       const name = item.seriesName ?? item.name;
       options.push({ id: "favorite", label: target.favorite ? `Remove ${name} from Favorites` : `Add ${name} to Favorites` });
     }
+    if (item.type === "Movie" || item.type === "Episode") options.push({ id: "played", label: "Mark as played" });
     if (asking.continuing) options.push({ id: "continue", label: "Remove from Continue Watching" });
     // Wait for the show's own state before opening, so the drawer never opens empty.
     if (options.length)
@@ -57,7 +59,8 @@ export function useItemMenu() {
           options={options}
           value=""
           onPick={(id) => {
-            if (id === "continue") void removeFromContinue(item);
+            if (id === "played") void removeFromContinue(item, true);
+            else if (id === "continue") void removeFromContinue(item);
             else if (target) void toggleFavorite(target.id, !target.favorite);
           }}
           onClose={() => setAsking(null)}

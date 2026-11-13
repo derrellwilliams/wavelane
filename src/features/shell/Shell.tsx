@@ -9,6 +9,7 @@ import { Icon } from "../../design/components/Icon";
 import type { IconName } from "../../design/icons.gen";
 import { focusFirst, focusIfUsable, onEdge } from "../../nav/focus";
 import { useBack } from "../../nav/hooks";
+import { input } from "../../platform/platform";
 import { Account } from "../account/Account";
 import { Detail } from "../detail/Detail";
 import { Home } from "../home/Home";
@@ -49,6 +50,9 @@ export function Shell({ session, onSetupCheck, onSignOut }: Props) {
   const open = pages.value;
   const top = open[open.length - 1];
   const watching = playing.value;
+  // On the TV the screens under a detail page are taken out of the page so the remote can't reach
+  // them. On the tablet they stay, covered, so Back returns to the same scroll position.
+  const covered = !!top && input.dpad;
 
   // Letterboxd averages are read in the background for the library's movies.
   const movies = useResource("all:Movie", loadMovies).data;
@@ -95,7 +99,7 @@ export function Shell({ session, onSetupCheck, onSignOut }: Props) {
 
   return (
     <div class="shell">
-      <nav ref={rail} class="rail" hidden={!!top} data-focus-group data-focus-manual>
+      <nav ref={rail} class="rail" hidden={covered} data-focus-group data-focus-manual>
         {TABS.map((entry) => (
           <button
             key={entry.id}
@@ -113,7 +117,7 @@ export function Shell({ session, onSetupCheck, onSignOut }: Props) {
           </button>
         ))}
       </nav>
-      <div ref={content} class="content" hidden={!!top} onFocusIn={(event) => (lastInContent.current = event.target as Element)}>
+      <div ref={content} class="content" hidden={covered} onFocusIn={(event) => (lastInContent.current = event.target as Element)}>
         {current === "home" && <Home />}
         {current === "movies" && <Library key="Movie" type="Movie" />}
         {current === "shows" && <Library key="Series" type="Series" />}

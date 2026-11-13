@@ -3,6 +3,7 @@
 /// is only ever rendered as text); numbers are range-checked. The rest of the app and the cache
 /// only ever see an `Item`.
 import type { BaseItemDto, UserItemDataDto } from "@jellyfin/sdk/lib/generated-client/models";
+import { input } from "../platform/platform";
 import { toSubTracks, type SubTrack } from "../subtitles/tracks";
 import { session } from "./session";
 
@@ -200,15 +201,25 @@ export function toItems(reply: unknown): Item[] {
 
 /// Address of an image at the size it will be shown. `crop` fills the box exactly (posters,
 /// thumbnails); otherwise the image is fitted inside it (logos). Images need no token.
-export function artUrl(server: string, image: Art, width: number, height: number, crop = true): string {
+export function artUrl(server: string, image: Art, width: number, height: number, crop = true, light = false): string {
   const size = crop ? `fillWidth=${width}&fillHeight=${height}` : `maxWidth=${width}&maxHeight=${height}`;
-  return `${server}/Items/${image.id}/Images/${image.kind}?${size}&quality=90&tag=${image.tag}`;
+  // `light` (the tablet): WebP at a lower quality, a smaller file for a weak chip and Wi-Fi.
+  const look = light ? "format=Webp&quality=80" : "quality=90";
+  return `${server}/Items/${image.id}/Images/${image.kind}?${size}&${look}&tag=${image.tag}`;
+}
+
+/// Requested size for a slot of `css` pixels: the tablet's screen has more device pixels than
+/// CSS pixels (1.33 on the Fire HD 8), capped at 2 so a sharper screen doesn't mean bigger files.
+export function imagePixels(css: number, ratio: number, touch: boolean): number {
+  return Math.round(touch ? css * Math.min(2, Math.max(1, ratio)) : css);
 }
 
 /// The same, for the signed-in server. Null when there is no image or no session.
 export function artSrc(image: Art | undefined, width: number, height: number, crop = true): string | null {
   const server = session.value?.server;
-  return image && server ? artUrl(server, image, Math.round(width), Math.round(height), crop) : null;
+  if (!image || !server) return null;
+  const ratio = typeof window === "undefined" ? 1 : window.devicePixelRatio;
+  return artUrl(server, image, imagePixels(width, ratio, input.touch), imagePixels(height, ratio, input.touch), crop, input.touch);
 }
 
 /// "2h 12m", "48m".

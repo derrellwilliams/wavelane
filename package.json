@@ -11,13 +11,19 @@
     "test": "vitest run",
     "seed": "node scripts/seed-export.mjs",
     "icons": "node scripts/make-icons.mjs",
-    "phosphor": "node scripts/make-phosphor.mjs"
+    "phosphor": "node scripts/make-phosphor.mjs",
+    "build:android": "node scripts/android-config.mjs && vite build --mode android && cap sync android",
+    "apk": "sh scripts/apk.sh"
   },
   "dependencies": {
+    "@capacitor/android": "8.6.0",
+    "@capacitor/app": "8.1.2",
+    "@capacitor/core": "8.6.0",
     "@preact/signals": "2.11.4",
     "preact": "^11.1.0"
   },
   "devDependencies": {
+    "@capacitor/cli": "8.6.0",
     "@jellyfin/sdk": "1.0.2",
     "@phosphor-icons/core": "2.1.1",
     "@preact/preset-vite": "2.10.6",

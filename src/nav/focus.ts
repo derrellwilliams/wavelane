@@ -4,6 +4,8 @@
 ///
 /// Text fields are a focusable frame around an <input>. The input only takes focus (and opens the
 /// TV keyboard) after OK on the frame; Up, Down, Back or closing the keyboard return to the frame.
+import { signal } from "@preact/signals";
+import { input } from "../platform/platform";
 import { pickNext, type Direction } from "./geometry";
 import { directionOf, isBack, isOK } from "./keys";
 
@@ -60,6 +62,8 @@ function focus(element: HTMLElement) {
 /// Puts focus on the item marked `data-autofocus`, or the first one. Screens call this when they
 /// appear or swap their contents, since the element that had focus is gone.
 export function focusFirst(container: ParentNode = root()): void {
+  // A touch screen has no focus position to start from, and focusing would only make it jump.
+  if (!input.dpad) return;
   const items = Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(usable);
   const target = items.find((item) => item.hasAttribute("data-autofocus")) ?? items[0];
   if (target) focus(target);
@@ -126,6 +130,7 @@ export function onKey(handler: KeyHandler): () => void {
 
 /// Focuses `element` if the remote can land on it. False when it is gone or hidden.
 export function focusIfUsable(element: Element | null | undefined): boolean {
+  if (!input.dpad) return false;
   if (!(element instanceof HTMLElement) || !element.isConnected || !usable(element)) return false;
   focus(element);
   return true;
@@ -148,17 +153,28 @@ export function pushScope(element: HTMLElement): () => void {
 /// Registers what Back does while a screen or overlay is showing. The newest handler wins.
 export function onBack(handler: BackHandler): () => void {
   backHandlers.push(handler);
+  canGoBack.value = true;
   return () => {
     const index = backHandlers.lastIndexOf(handler);
     if (index >= 0) backHandlers.splice(index, 1);
+    canGoBack.value = backHandlers.length > 0;
   };
 }
 
+/// True while any screen or overlay has registered a Back handler (the tablet shows its Back arrow).
+export const canGoBack = signal(false);
+
 function back() {
+  if (!handleBack()) window.PalmSystem?.platformBack?.();
+}
+
+/// Runs the newest Back handler. False when nothing is registered (the caller decides what leaving
+/// the app means: the TV hands Back to webOS, the tablet minimizes).
+export function handleBack(): boolean {
   const handler = backHandlers[backHandlers.length - 1];
-  if (handler) handler();
-  // Nothing left to go back to: hand Back to the TV, which leaves the app.
-  else window.PalmSystem?.platformBack?.();
+  if (!handler) return false;
+  handler();
+  return true;
 }
 
 function onKeyDown(event: KeyboardEvent) {

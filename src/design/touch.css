@@ -1,0 +1,70 @@
+/* The tablet's behaviour rules, all under html[data-platform="android"] so the TV is untouched.
+   Sizes are in tokens.css. Here: fingers scroll the containers natively (the TV's engine only
+   clips them), a tap shows press feedback instead of the remote's focus fill, and the floating
+   Back button. */
+
+html[data-platform="android"] [data-scroll="y"],
+html[data-platform="android"] .page {
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+html[data-platform="android"] [data-scroll="x"] {
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+}
+html[data-platform="android"] ::-webkit-scrollbar {
+  display: none;
+}
+
+/* No focus position on a touch screen: a tapped control must not stay lit like a remote's cursor. */
+html[data-platform="android"] .button:focus {
+  background: var(--tint);
+  color: var(--ink);
+}
+html[data-platform="android"] .button[aria-pressed="true"] {
+  background: var(--tint-pressed);
+  box-shadow: inset 0 0 0 var(--focus-ring) var(--line);
+}
+html[data-platform="android"] .button:active:not([aria-disabled="true"]) {
+  background: var(--tint-pressed);
+}
+html[data-platform="android"] .rail-item:focus:not(.is-active) {
+  background: none;
+  color: var(--ink-2);
+}
+html[data-platform="android"] .rail-item.is-active:focus {
+  background: var(--tint);
+  color: var(--ink);
+}
+html[data-platform="android"] .card:focus .card-art {
+  box-shadow: 0 0 0 var(--focus-ring) transparent;
+  transform: none;
+}
+html[data-platform="android"] .card:active .card-art {
+  transform: scale(var(--press-scale));
+}
+html[data-platform="android"] .about {
+  max-width: 100%;
+}
+
+.back-button {
+  position: fixed;
+  top: var(--space-sm);
+  left: var(--space-sm);
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--control);
+  height: var(--control);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-small);
+  background: var(--scrim);
+  color: var(--ink);
+}
+.back-button:active {
+  background: var(--tint-pressed);
+}

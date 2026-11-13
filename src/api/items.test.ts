@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { artUrl, cardText, episodeCode, facts, runtime, toItem, toItems, years } from "./items";
+import { artUrl, cardText, episodeCode, facts, imagePixels, runtime, toItem, toItems, years } from "./items";
 
 const ID = "0123456789abcdef0123456789abcdef";
 const SERIES = "fedcba9876543210fedcba9876543210";
@@ -197,5 +197,23 @@ describe("text for cards and headers", () => {
   it("shows what is left to watch on a show's card", () => {
     expect(cardText({ ...base, type: "Series", year: 2020, unplayed: 4 })).toEqual({ title: "Name", detail: "4 to watch" });
     expect(cardText({ ...base, type: "Movie", year: 2020 })).toEqual({ title: "Name", detail: "2020" });
+  });
+});
+
+describe("tablet image requests", () => {
+  const art = { id: "a".repeat(32), kind: "Primary" as const, tag: "b".repeat(32) };
+  it("asks for WebP at a lighter quality when light", () => {
+    const url = artUrl("http://nas:8096", art, 160, 240, true, true);
+    expect(url).toContain("format=Webp&quality=80");
+    expect(url).not.toContain("quality=90");
+  });
+  it("leaves the TV's request as it was", () => {
+    expect(artUrl("http://nas:8096", art, 160, 240)).toContain("quality=90");
+  });
+  it("sizes for the screen's pixels on the tablet only, capped at 2x", () => {
+    expect(imagePixels(160, 1.33, true)).toBe(213);
+    expect(imagePixels(160, 3, true)).toBe(320);
+    expect(imagePixels(160, 0.5, true)).toBe(160);
+    expect(imagePixels(160, 1.33, false)).toBe(160);
   });
 });

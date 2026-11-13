@@ -1,7 +1,9 @@
 node_modules/
 dist/
+dist-android/
 build/
 *.ipk
+*.apk
 .DS_Store
 .env*
 .vercel
@@ -16,3 +18,7 @@ build/
 /docs/PLAN.md
 # Personal data (e.g. account exports) used to test parsers
 /scratch/
+
+# Android: server address for the network config, and what is generated from it
+/android.local.json
+/android/app/src/main/res/xml/network_security_config.xml

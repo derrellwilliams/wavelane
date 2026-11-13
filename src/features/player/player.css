@@ -220,8 +220,8 @@
 }
 .sub-stage-inner {
   position: relative;
-  width: 1920px;
-  height: 1080px;
+  width: var(--preview-canvas-w);
+  height: var(--preview-canvas-h);
   transform: scale(var(--preview-scale));
   transform-origin: top left;
 }

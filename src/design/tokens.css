@@ -81,6 +81,8 @@
   --card-art-gap: 14px; /* artwork to title */
   --card-text-gap: 4px; /* title to year */
   --hero: 600px; /* least height of the spotlight and the detail header */
+  --backdrop-w: 1920px; /* size requested for the hero's backdrop picture */
+  --backdrop-h: 1080px;
   --hero-text: 900px;
   --logo-w: 560px;
   --logo-h: 180px;
@@ -110,6 +112,8 @@
   --preview-w: 768px;
   --preview-h: 432px;
   --preview-scale: 0.4;
+  --preview-canvas-w: 1920px; /* the stage the subtitle preview is drawn on, scaled down by the line above */
+  --preview-canvas-h: 1080px;
 
   /* Radius: artwork is square. */
   --radius-small: 10px;
@@ -125,4 +129,83 @@
   --press: 120ms;
   --snappy: 200ms;
   --smooth: 280ms;
+}
+
+/* The Fire HD 8 (set by main.tsx as data-platform="android"). The tablet's page is 960×600 CSS
+   pixels (1280×800 device pixels at 1.33), held at arm's length and touched, so this is
+   Wavetile's own scale at roughly ×1: type from 12 to 32, a 48 px touch target, five posters or
+   three wide cards across beside a 64 px rail. Only values change here; the rules are shared. */
+html[data-platform="android"] {
+  --size-caption: 12px;
+  --size-small: 14px;
+  --size-body: 16px;
+  --size-large: 20px;
+  --size-lead: 22px;
+  --size-title: 24px;
+  --size-display: 32px;
+  --size-code: 56px;
+  --tracking-code: 6px;
+  --tracking-display: -0.5px;
+
+  --space-xxs: 2px;
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;
+  --space-xxl: 56px; /* room under it for the floating back button */
+  --screen-inset: 24px;
+
+  --control: 48px;
+  --field: 60px;
+  --field-width: 420px;
+  --measure: 560px;
+  --icon: 22px;
+  --mark-width: 120px;
+  --mark-height: 21px;
+
+  --rail: 64px;
+  --poster-w: 160px; /* five across plus four gaps fit beside the rail */
+  --poster-h: 240px;
+  --thumb-w: 272px; /* three across */
+  --thumb-h: 153px;
+  --person-w: 100px;
+  --person-h: 150px;
+  --card-gap: 12px;
+  --shelf-gap: 8px;
+  --card-caption: 40px;
+  --grid-columns: 5;
+  --card-art-gap: 8px;
+  --card-text-gap: 2px;
+  --hero: 280px;
+  --backdrop-w: 960px;
+  --backdrop-h: 540px;
+  --hero-text: 520px;
+  --logo-w: 280px;
+  --logo-h: 90px;
+  --drawer: 340px;
+  --progress: 4px;
+  --badge: 24px;
+  --overview-lines: 3;
+  --overview-lines-short: 2;
+
+  --sub-size-s: 20px;
+  --sub-size-m: 24px;
+  --sub-size-l: 29px;
+  --sub-size-xl: 36px;
+  --sub-low: 40px;
+  --sub-mid: 80px;
+  --sub-high: 140px;
+  --sub-lift: 150px;
+  --sub-edge: 2px;
+  --preview-w: 384px;
+  --preview-h: 216px;
+  --preview-scale: 0.4;
+  --preview-canvas-w: 960px;
+  --preview-canvas-h: 540px;
+
+  --radius-small: 8px;
+  --radius-card: 14px;
+  --focus-ring: 2px;
+  --focus-scale: 1;
 }

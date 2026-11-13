@@ -7,3 +7,8 @@
 .hello-list dd {
   margin: 0;
 }
+/* The tablet scrolls natively; the TV screen doesn't need to. */
+html[data-platform="android"] .hello-page {
+  overflow-y: auto;
+  height: 100%;
+}

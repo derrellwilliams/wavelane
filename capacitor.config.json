@@ -1,0 +1,17 @@
+{
+  "appId": "com.derrellwilliams.wavelane",
+  "appName": "Wavelane",
+  "backgroundColor": "#1a1a1a",
+  "webDir": "dist-android",
+  "server": {
+    "androidScheme": "http"
+  },
+  "android": {
+    "allowMixedContent": false
+  },
+  "plugins": {
+    "CapacitorHttp": {
+      "enabled": false
+    }
+  }
+}

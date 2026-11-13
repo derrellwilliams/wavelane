@@ -8,6 +8,7 @@ import { Button } from "./design/components/Button";
 import { Mark } from "./design/components/Mark";
 import { Hello } from "./features/hello/Hello";
 import { resetRoute } from "./features/shell/route";
+import { BackButton } from "./features/shell/BackButton";
 import { Shell } from "./features/shell/Shell";
 import { SignIn } from "./features/signin/SignIn";
 import { useAutoFocus } from "./nav/hooks";
@@ -73,6 +74,15 @@ function Offline({ serverName }: { serverName: string }) {
 }
 
 export function App() {
+  return (
+    <>
+      <Screens />
+      <BackButton />
+    </>
+  );
+}
+
+function Screens() {
   useEffect(() => void check(true), []);
 
   const current = session.value;
